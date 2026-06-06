@@ -54,7 +54,9 @@ const PWAInstallBanner: React.FC = () => {
       setTimeout(() => setAnimateIn(true), 100);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    if (!isIOS) {
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    }
 
     // 5. Handle iOS prompt (Safari doesn't support programmatic beforeinstallprompt)
     if (isIOS) {
