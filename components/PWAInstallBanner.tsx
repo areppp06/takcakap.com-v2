@@ -31,10 +31,10 @@ const PWAInstallBanner: React.FC = () => {
       return;
     }
 
-    // 2. Check dismissal cooldown (14 days)
+    // 2. Check dismissal cooldown (48 hours)
     const dismissedTime = localStorage.getItem('pwa_dismissed_time');
-    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
-    if (dismissedTime && (Date.now() - Number(dismissedTime) < fourteenDaysMs)) {
+    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+    if (dismissedTime && (Date.now() - Number(dismissedTime) < fortyEightHoursMs)) {
       setShowBanner(false);
       return;
     }
