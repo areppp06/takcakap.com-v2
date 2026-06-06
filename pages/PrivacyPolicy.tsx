@@ -190,7 +190,7 @@ const PrivacyPolicy: React.FC = () => {
               <ul className="mt-2 list-none space-y-1 pl-0">
                 <li><span className="font-semibold">Business Name:</span> DE WARISAN IBUNDA ENTERPRISE</li>
                 <li><span className="font-semibold">Email:</span> support@takcakap.com</li>
-                <li><span className="font-semibold">Phone:</span> +6011667670365</li>
+                <li><span className="font-semibold">Phone:</span> +601166767365</li>
               </ul>
             </div>
           </section>

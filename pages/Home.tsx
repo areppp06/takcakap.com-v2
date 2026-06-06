@@ -317,8 +317,8 @@ const Home: React.FC = () => {
                   </li>
                   <li>
                     Phone:{' '}
-                    <a href="tel:+6011667670365" className="font-semibold text-primary hover:underline">
-                      +6011667670365
+                    <a href="tel:+601166767365" className="font-semibold text-primary hover:underline">
+                      +601166767365
                     </a>
                   </li>
                   <li>Operating Hours: 9AM - 2PM (subject to availability)</li>

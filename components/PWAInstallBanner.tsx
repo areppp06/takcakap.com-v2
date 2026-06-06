@@ -10,6 +10,12 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+declare global {
+  interface Window {
+    deferredPrompt?: BeforeInstallPromptEvent | null;
+  }
+}
+
 const PWAInstallBanner: React.FC = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [platform, setPlatform] = useState<'android' | 'ios' | null>(null);
@@ -46,16 +52,26 @@ const PWAInstallBanner: React.FC = () => {
 
     // 4. Register event listener for Android / Chrome native install prompt
     const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      const promptEvent = (e as CustomEvent).detail || e;
+      promptEvent.preventDefault();
+      setDeferredPrompt(promptEvent as BeforeInstallPromptEvent);
       setPlatform('android');
       setShowBanner(true);
       // Trigger animations slightly after mount
       setTimeout(() => setAnimateIn(true), 100);
     };
 
+    // Check if the event was already captured globally
+    if (window.deferredPrompt && !isIOS) {
+      setDeferredPrompt(window.deferredPrompt);
+      setPlatform('android');
+      setShowBanner(true);
+      setTimeout(() => setAnimateIn(true), 100);
+    }
+
     if (!isIOS) {
       window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener('pwa-beforeinstallprompt' as any, handleBeforeInstallPrompt);
     }
 
     // 5. Handle iOS prompt (Safari doesn't support programmatic beforeinstallprompt)
@@ -67,6 +83,7 @@ const PWAInstallBanner: React.FC = () => {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa-beforeinstallprompt' as any, handleBeforeInstallPrompt);
     };
   }, [isAdminRoute]);
 

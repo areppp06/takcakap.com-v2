@@ -22,6 +22,7 @@ const db = require('./db');
 const lalamoveService = require('./lalamoveService');
 const emailService = require('./emailService');
 const { assertNoPendingMigrations } = require('./migrationRunner');
+const { sendPushToUser } = require('./pushService');
 const multer = require('multer');
 const r2Service = require('./r2Service');
 
@@ -70,7 +71,7 @@ const ALLOW_UNVERIFIED_DUITNOW_ORDERS = String(process.env.ALLOW_UNVERIFIED_DUIT
     .toLowerCase() === 'true';
 const DEFAULT_DUITNOW_QR_URL = String(
     process.env.DUITNOW_QR_URL ||
-        'https://res.cloudinary.com/dzayh29d7/image/upload/v1770301357/KC_QR_vljdez.png'
+    'https://res.cloudinary.com/dzayh29d7/image/upload/v1770301357/KC_QR_vljdez.png'
 ).trim();
 const parsedDefaultServiceFee = Number.parseFloat(String(process.env.DEFAULT_SERVICE_FEE ?? '1.8'));
 const DEFAULT_SERVICE_FEE = Math.max(0, Number.isFinite(parsedDefaultServiceFee) ? parsedDefaultServiceFee : 1.8);
@@ -86,7 +87,7 @@ const LALAMOVE_API_SECRET = String(process.env.LALAMOVE_API_SECRET || '').trim()
 const LALAMOVE_WEBHOOK_SECRET = String(process.env.LALAMOVE_WEBHOOK_SECRET || '').trim();
 const LALAMOVE_DEFAULT_REMARK_TEMPLATE = String(
     process.env.LALAMOVE_DEFAULT_REMARK_TEMPLATE ||
-        'Pickup Note: Order No. {orderId} | Order For: {userName} | Recipent Note:'
+    'Order #{orderId} | {userName}'
 ).trim();
 const LALAMOVE_REMARK_MAX_LENGTH = Math.max(
     80,
@@ -108,9 +109,9 @@ const DEFAULT_STORE_LATITUDE = 3.1347;
 const DEFAULT_STORE_LONGITUDE = 101.6869;
 const DEFAULT_BRAND_LOGO_URL = String(
     process.env.RECEIPT_LOGO_URL ||
-        process.env.BRAND_LOGO_URL ||
-        process.env.VITE_BRAND_LOGO_URL ||
-        'https://res.cloudinary.com/dzayh29d7/image/upload/v1771022152/X_d2eevj.png'
+    process.env.BRAND_LOGO_URL ||
+    process.env.VITE_BRAND_LOGO_URL ||
+    'https://res.cloudinary.com/dzayh29d7/image/upload/v1771022152/X_d2eevj.png'
 ).trim();
 const CORS_ORIGINS = String(process.env.CORS_ORIGINS || '')
     .split(',')
@@ -337,6 +338,70 @@ const normalizeAdminSearchQuery = (value) => {
     if (!normalized) return '';
     return normalized.slice(0, 80);
 };
+const triggerOrderPushNotification = async (orderId, reason) => {
+    if (!orderId) return;
+    try {
+        const [rows] = await db.query('SELECT user_id, status, lalamove_status FROM orders WHERE id = ?', [orderId]);
+        if (!rows.length) return;
+        const order = rows[0];
+
+        let title = 'TakCakap Order Update';
+        let body = `Your order #${orderId} status has changed.`;
+        let notify = false;
+
+        const status = String(order.status || '').trim();
+        const lalaStatus = String(order.lalamove_status || '').trim();
+        const r = String(reason || '').trim();
+
+        if (r.startsWith('status_') || r === 'cancelled') {
+            notify = true;
+            if (status === 'Processing') {
+                title = 'Order Processing 🍳';
+                body = `We have started preparing your order #${orderId}!`;
+            } else if (status === 'Completed') {
+                title = 'Order Completed ✅';
+                body = `Your order #${orderId} has been completed. Enjoy!`;
+            } else if (status === 'Cancelled') {
+                title = 'Order Cancelled ❌';
+                body = `Your order #${orderId} has been cancelled.`;
+            }
+        } else if (r === 'lalamove_webhook' || r === 'lalamove_sync') {
+            notify = true;
+            if (lalaStatus === 'ASSIGNING_DRIVER') {
+                title = 'Looking for Rider 🛵';
+                body = 'We are finding a Lalamove rider for your delivery.';
+            } else if (lalaStatus === 'ON_GOING') {
+                title = 'Rider Found 🚀';
+                body = 'A Lalamove rider is heading to the store.';
+            } else if (lalaStatus === 'PICKED_UP') {
+                title = 'Out for Delivery 🛵💨';
+                body = 'Your food is on the way!';
+            } else if (lalaStatus === 'CANCELED') {
+                title = 'Delivery Cancelled ⚠️';
+                body = 'The Lalamove delivery was cancelled.';
+            } else {
+                notify = false; // Don't notify on every small lalamove state change unless handled above
+            }
+        } else if (r === 'refund_processed' || r === 'refund_failed') {
+            notify = true;
+            title = r === 'refund_processed' ? 'Refund Processed 💸' : 'Refund Failed ⚠️';
+            body = r === 'refund_processed'
+                ? `A refund for order #${orderId} has been processed.`
+                : `A refund attempt for order #${orderId} failed.`;
+        } else if (r === 'payment_captured') {
+            notify = true;
+            title = 'Payment Successful 💰';
+            body = `Your payment for order #${orderId} was received.`;
+        }
+
+        if (notify) {
+            await sendPushToUser(order.user_id, title, body, '/orders');
+        }
+    } catch (e) {
+        console.error('Push notification failed:', e);
+    }
+};
+
 const emitOrdersChangedEvent = ({ source = 'system', orderId = null, reason = '' } = {}) => {
     orderEventSequence += 1;
     const payload = {
@@ -347,6 +412,9 @@ const emitOrdersChangedEvent = ({ source = 'system', orderId = null, reason = ''
         emittedAtUtc: new Date().toISOString()
     };
     orderEvents.emit('orders_changed', payload);
+
+    // Trigger push notification asynchronously
+    triggerOrderPushNotification(payload.orderId, payload.reason).catch(() => { });
 };
 const formatOrderRowForClient = (o) => {
     const cancelState = computeLalamoveCancelState({
@@ -389,9 +457,9 @@ const formatOrderRowForClient = (o) => {
     return {
         ...(o.scheduled_at_utc_iso
             ? {
-                  scheduledAtUtc: o.scheduled_at_utc_iso,
-                  scheduledAtLabel: formatScheduledAtLabel(o.scheduled_at_utc_iso)
-              }
+                scheduledAtUtc: o.scheduled_at_utc_iso,
+                scheduledAtLabel: formatScheduledAtLabel(o.scheduled_at_utc_iso)
+            }
             : {}),
         id: String(o.id),
         customerName: o.customer_name || 'Guest',
@@ -568,10 +636,10 @@ const isLalamoveInvalidQuotationError = (error) => {
     if (errorId === 'ERR_INVALID_QUOTATION_ID') return true;
     const rawMessage = String(
         error?.payload?.errors?.[0]?.message ||
-            error?.payload?.errors?.[0]?.detail ||
-            error?.payload?.message ||
-            error?.message ||
-            ''
+        error?.payload?.errors?.[0]?.detail ||
+        error?.payload?.message ||
+        error?.message ||
+        ''
     )
         .trim()
         .toLowerCase();
@@ -848,9 +916,9 @@ const normalizeCurlecRefundSpeed = (value) => {
 const isCurlecInstantRefundUnsupportedError = (error) => {
     const description = String(
         error?.payload?.error?.description ||
-            error?.payload?.error?.message ||
-            error?.message ||
-            ''
+        error?.payload?.error?.message ||
+        error?.message ||
+        ''
     )
         .trim()
         .toLowerCase();
@@ -860,9 +928,9 @@ const isCurlecInstantRefundUnsupportedError = (error) => {
 const isCurlecInvalidRequestError = (error) => {
     const description = String(
         error?.payload?.error?.description ||
-            error?.payload?.error?.message ||
-            error?.message ||
-            ''
+        error?.payload?.error?.message ||
+        error?.message ||
+        ''
     )
         .trim()
         .toLowerCase();
@@ -1323,10 +1391,10 @@ const issueCurlecRefundForOrder = async ({
         const refundSpeedProcessed = normalizeCurlecRefundSpeed(refund?.speed_processed) || null;
         const refundFailureReason = String(
             refund?.error?.description ||
-                refund?.error?.reason ||
-                refund?.error_description ||
-                refund?.error_reason ||
-                ''
+            refund?.error?.reason ||
+            refund?.error_description ||
+            refund?.error_reason ||
+            ''
         )
             .trim()
             .slice(0, 500);
@@ -1401,8 +1469,8 @@ const issueCurlecRefundForOrder = async ({
                     refundStatus === REFUND_STATUS_FAILED
                         ? refundFailureReason || 'Refund failed'
                         : refundStatus === REFUND_STATUS_PROCESSED
-                          ? 'Refund processed successfully'
-                          : 'Refund request accepted'
+                            ? 'Refund processed successfully'
+                            : 'Refund request accepted'
             }
         };
     } catch (error) {
@@ -1468,9 +1536,9 @@ const applyCurlecRefundWebhookUpdate = async ({ eventType, refundEntity }) => {
     const refundReason = String(refundEntity?.notes?.reason || '').trim().slice(0, 255) || null;
     const refundFailureReason = String(
         refundEntity?.error_description ||
-            refundEntity?.error_reason ||
-            refundEntity?.acquirer_data?.error_reason ||
-            ''
+        refundEntity?.error_reason ||
+        refundEntity?.acquirer_data?.error_reason ||
+        ''
     )
         .trim()
         .slice(0, 500);
@@ -3607,15 +3675,15 @@ app.get('/api/admin/sales/report.csv', requireAdmin, async (req, res) => {
             const createdIso = toUtcIsoString(row.created_at);
             const createdMyt = createdIso
                 ? new Date(createdIso).toLocaleString('en-MY', {
-                      timeZone: SHOP_TIMEZONE,
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                      hour12: false
-                  })
+                    timeZone: SHOP_TIMEZONE,
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                })
                 : '';
             const scheduledMyt = row.scheduled_at_utc ? formatScheduledAtLabel(row.scheduled_at_utc) : '';
 
@@ -3693,9 +3761,9 @@ app.post('/api/auth/google', authRateLimiter, async (req, res) => {
         const [foundByEmail] = foundByGoogle.length
             ? [[]]
             : await db.query(
-                  'SELECT id, name, email, role, avatar_url, phone_number, is_suspended FROM users WHERE email = ? LIMIT 1',
-                  [email]
-              );
+                'SELECT id, name, email, role, avatar_url, phone_number, is_suspended FROM users WHERE email = ? LIMIT 1',
+                [email]
+            );
 
         let userRow = foundByGoogle[0] || foundByEmail[0] || null;
 
@@ -4380,6 +4448,55 @@ app.delete('/api/addresses/:id', requireAuth, async (req, res) => {
     }
 });
 
+// -- PUSH NOTIFICATIONS API --
+app.get('/api/notifications/vapid-public-key', (req, res) => {
+    res.send(process.env.VAPID_PUBLIC_KEY || '');
+});
+
+app.post('/api/notifications/subscribe', requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+        return res.status(400).json({ error: 'Invalid subscription object' });
+    }
+
+    try {
+        await db.query(`
+            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                user_id = VALUES(user_id), 
+                p256dh = VALUES(p256dh), 
+                auth = VALUES(auth)
+        `, [
+            userId,
+            subscription.endpoint,
+            subscription.keys.p256dh,
+            subscription.keys.auth
+        ]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Failed to save push subscription:', err);
+        res.status(500).json({ error: 'Failed to save subscription' });
+    }
+});
+
+app.delete('/api/notifications/unsubscribe', requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    const { endpoint } = req.body;
+    if (!endpoint) {
+        return res.status(400).json({ error: 'Endpoint required' });
+    }
+
+    try {
+        await db.query('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?', [userId, endpoint]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Failed to remove push subscription:', err);
+        res.status(500).json({ error: 'Failed to remove subscription' });
+    }
+});
+
 app.get('/api/cart', requireAuth, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -4647,7 +4764,7 @@ app.get('/api/menu', async (req, res) => {
             ORDER BY COALESCE(c.sort_order, 2147483647) ASC, m.sort_order ASC, m.id ASC
         `;
         const [rows] = await db.query(query);
-        
+
         const formatted = rows.map(row => ({
             id: row.id.toString(),
             name: row.name,
@@ -4660,7 +4777,7 @@ app.get('/api/menu', async (req, res) => {
             stock: row.stock,
             isActive: Boolean(row.is_active)
         }));
-        
+
         res.json(formatted);
     } catch (err) {
         console.error(err);
@@ -4742,8 +4859,8 @@ app.put('/api/menu/:id', requireAdmin, async (req, res) => {
             category_id === undefined
                 ? undefined
                 : category_id === null || category_id === ''
-                  ? null
-                  : toPositiveInteger(category_id);
+                    ? null
+                    : toPositiveInteger(category_id);
         if (category_id !== undefined && category_id !== null && category_id !== '' && normalizedCategoryId === null) {
             return res.status(400).json({ error: 'Invalid category_id' });
         }
@@ -4791,17 +4908,17 @@ app.put('/api/menu/:id', requireAdmin, async (req, res) => {
                 resolvedSortOrder = Number(maxRes[0]?.maxSortOrder ?? -1) + 1;
             }
         }
-        
-        if(name !== undefined) { fields.push('name = ?'); values.push(name); }
-        if(description !== undefined) { fields.push('description = ?'); values.push(description); }
-        if(price !== undefined) { fields.push('price = ?'); values.push(price); }
-        if(image !== undefined) { fields.push('image_url = ?'); values.push(image); }
-        if(normalizedCategoryId !== undefined) { fields.push('category_id = ?'); values.push(normalizedCategoryId); }
-        if(resolvedSortOrder !== undefined) { fields.push('sort_order = ?'); values.push(resolvedSortOrder); }
-        if(stock !== undefined) { fields.push('stock = ?'); values.push(stock); }
-        if(isActive !== undefined) { fields.push('is_active = ?'); values.push(isActive); }
 
-        if(fields.length === 0) return res.json({ success: true }); // Nothing to update
+        if (name !== undefined) { fields.push('name = ?'); values.push(name); }
+        if (description !== undefined) { fields.push('description = ?'); values.push(description); }
+        if (price !== undefined) { fields.push('price = ?'); values.push(price); }
+        if (image !== undefined) { fields.push('image_url = ?'); values.push(image); }
+        if (normalizedCategoryId !== undefined) { fields.push('category_id = ?'); values.push(normalizedCategoryId); }
+        if (resolvedSortOrder !== undefined) { fields.push('sort_order = ?'); values.push(resolvedSortOrder); }
+        if (stock !== undefined) { fields.push('stock = ?'); values.push(stock); }
+        if (isActive !== undefined) { fields.push('is_active = ?'); values.push(isActive); }
+
+        if (fields.length === 0) return res.json({ success: true }); // Nothing to update
 
         values.push(menuItemId);
         const query = `UPDATE menu_items SET ${fields.join(', ')} WHERE id = ?`;
@@ -4811,7 +4928,7 @@ app.put('/api/menu/:id', requireAdmin, async (req, res) => {
             await syncCartWithStock(db);
         }
         res.json({ success: true });
-    } catch(err) {
+    } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to update item' });
     }
@@ -5069,9 +5186,9 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
             hasMore,
             nextCursor: nextRow
                 ? encodeAdminOrdersCursor({
-                      createdAtSql: nextRow.created_at_cursor || nextRow.created_at,
-                      id: nextRow.id
-                  })
+                    createdAtSql: nextRow.created_at_cursor || nextRow.created_at,
+                    id: nextRow.id
+                })
                 : null,
             pageSize: queryLimit,
             latestUpdatedAtUtc,
@@ -5186,9 +5303,9 @@ app.get('/api/admin/orders/stream', requireAdminStreamToken, (req, res) => {
     const expiryTimer =
         streamExpiryMs !== null && streamExpiryMs > 0
             ? setTimeout(() => {
-                  writeEvent('session_expired', { emittedAtUtc: new Date().toISOString() });
-                  res.end();
-              }, streamExpiryMs + 250)
+                writeEvent('session_expired', { emittedAtUtc: new Date().toISOString() });
+                res.end();
+            }, streamExpiryMs + 250)
             : null;
 
     req.on('close', () => {
@@ -5224,10 +5341,10 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
         const shouldPaginateMine = shouldFilterByUser;
         const queryLimit = shouldPaginateMine
             ? parsePositiveIntWithBounds(req.query?.limit, {
-                  fallback: USER_ORDERS_DEFAULT_LIMIT,
-                  min: 1,
-                  max: USER_ORDERS_MAX_LIMIT
-              })
+                fallback: USER_ORDERS_DEFAULT_LIMIT,
+                min: 1,
+                max: USER_ORDERS_MAX_LIMIT
+            })
             : null;
         const cursor = shouldFilterByUser ? decodeAdminOrdersCursor(req.query?.cursor) : null;
 
@@ -5299,7 +5416,7 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
         const hasMore = shouldPaginateMine ? orders.length > queryLimit : false;
         const pageRows = shouldPaginateMine ? orders.slice(0, queryLimit) : orders;
         const nextRow = shouldPaginateMine && hasMore ? pageRows[pageRows.length - 1] : null;
-        
+
         const summaryMap = await fetchOrderSummariesByOrderIds(
             pageRows.map((row) => row.id),
             db
@@ -5307,7 +5424,7 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
         for (const order of pageRows) {
             order.itemsSummary = summaryMap.get(toPositiveInteger(order.id)) || '';
         }
-        
+
         // Format response to match frontend types
         const formatted = pageRows.map((o) => {
             const cancelState = computeLalamoveCancelState({
@@ -5350,9 +5467,9 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
             return {
                 ...(o.scheduled_at_utc_iso
                     ? {
-                          scheduledAtUtc: o.scheduled_at_utc_iso,
-                          scheduledAtLabel: formatScheduledAtLabel(o.scheduled_at_utc_iso)
-                      }
+                        scheduledAtUtc: o.scheduled_at_utc_iso,
+                        scheduledAtLabel: formatScheduledAtLabel(o.scheduled_at_utc_iso)
+                    }
                     : {}),
                 id: o.id.toString(),
                 customerName: o.customer_name || 'Guest',
@@ -5420,9 +5537,9 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                 hasMore,
                 nextCursor: nextRow
                     ? encodeAdminOrdersCursor({
-                          createdAtSql: nextRow.created_at_cursor || nextRow.created_at,
-                          id: nextRow.id
-                      })
+                        createdAtSql: nextRow.created_at_cursor || nextRow.created_at,
+                        id: nextRow.id
+                    })
                     : null,
                 pageSize: queryLimit,
                 latestUpdatedAtUtc,
@@ -6261,7 +6378,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 dispatchError?.message || 'Delivery has been queued and will be assigned manually.';
             console.error(
                 `Lalamove dispatch failed for order ${orderId}:`,
-                dispatchError?.payload || dispatchError?.message || dispatchError
+                JSON.stringify(dispatchError?.payload || dispatchError?.message || dispatchError)
             );
             await db
                 .query(
@@ -6288,8 +6405,8 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         (deliveryBookingStatus === 'cancelled_before_dispatch_commit'
             ? null
             : isLalamoveDelivery
-              ? 'BOOKING_FAILED'
-              : null);
+                ? 'BOOKING_FAILED'
+                : null);
 
     emailService.queueOrderEventEmail(orderId, 'payment_success');
     return res.json({
@@ -7062,10 +7179,10 @@ app.post('/api/webhooks/curlec', webhookRateLimiter, async (req, res) => {
         const entityEventId =
             String(
                 refundEntity?.id ||
-                    refundEntity?.payment_id ||
-                    paymentEntity?.id ||
-                    paymentEntity?.order_id ||
-                    ''
+                refundEntity?.payment_id ||
+                paymentEntity?.id ||
+                paymentEntity?.order_id ||
+                ''
             ).trim() || buildWebhookPayloadHash(rawBody).slice(0, 24);
         const derivedEventId = rawEventId || `${eventType}:${entityEventId}`;
         webhookReservation = await reserveWebhookEventForProcessing({
@@ -7171,12 +7288,12 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
 
         const eventType = String(
             req.body?.eventType ||
-                req.body?.type ||
-                req.body?.event ||
-                req.body?.data?.eventType ||
-                req.body?.data?.type ||
-                req.body?.data?.event ||
-                'UNKNOWN'
+            req.body?.type ||
+            req.body?.event ||
+            req.body?.data?.eventType ||
+            req.body?.data?.type ||
+            req.body?.data?.event ||
+            'UNKNOWN'
         ).trim();
         const payload = req.body?.data && typeof req.body?.data === 'object' ? req.body.data : req.body || {};
         const externalOrderIdCandidate =
@@ -7199,8 +7316,8 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
                 verification.reason === 'verification_not_configured'
                     ? 'config_error'
                     : verification.reason === 'missing_timestamp'
-                      ? 'invalid_timestamp'
-                      : 'invalid_signature';
+                        ? 'invalid_timestamp'
+                        : 'invalid_signature';
             recordWebhookEvent({ provider: 'lalamove', eventType: eventType || 'unknown', status });
             if (verification.reason === 'missing_timestamp' && !externalOrderIdCandidate) {
                 // Keep non-order callbacks from retrying indefinitely when providers omit timestamp metadata.
@@ -7210,15 +7327,15 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
                 verification.reason === 'verification_not_configured'
                     ? 503
                     : verification.reason === 'missing_timestamp'
-                      ? 400
-                      : 401;
+                        ? 400
+                        : 401;
             return res.status(responseStatus).json({
                 error:
                     verification.reason === 'verification_not_configured'
                         ? 'Lalamove webhook verification is not configured'
                         : verification.reason === 'missing_timestamp'
-                          ? 'Missing Lalamove webhook timestamp'
-                        : 'Invalid Lalamove webhook signature'
+                            ? 'Missing Lalamove webhook timestamp'
+                            : 'Invalid Lalamove webhook signature'
             });
         }
 
@@ -7237,11 +7354,11 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
 
         const rawEventId = String(
             req.body?.eventId ||
-                req.body?.id ||
-                payload?.eventId ||
-                payload?.id ||
-                payload?.messageId ||
-                ''
+            req.body?.id ||
+            payload?.eventId ||
+            payload?.id ||
+            payload?.messageId ||
+            ''
         ).trim();
         const payloadHash = buildWebhookPayloadHash(rawBody);
         const fallbackEventId = `${String(eventType || 'UNKNOWN').trim()}:${payloadHash.slice(0, 24)}`;

@@ -151,8 +151,8 @@ const ContactUs: React.FC = () => {
                 </div>
                 <h2 className="text-lg font-bold">Phone</h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                  <a href="tel:+6011667670365" className="font-semibold text-primary hover:underline">
-                    +6011667670365
+                  <a href="tel:+601166767365" className="font-semibold text-primary hover:underline">
+                    +601166767365
                   </a>
                   <br />
                   9AM - 2PM (subject to availability)
@@ -178,7 +178,7 @@ const ContactUs: React.FC = () => {
                 <h2 className="text-lg font-bold">WhatsApp</h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                   <a
-                    href="https://wa.me/6011667670365"
+                    href="https://wa.me/601166767365"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-semibold text-primary hover:underline"
@@ -326,8 +326,8 @@ const ContactUs: React.FC = () => {
                   </li>
                   <li>
                     Phone:{' '}
-                    <a href="tel:+6011667670365" className="font-semibold text-primary hover:underline">
-                      +6011667670365
+                    <a href="tel:+601166767365" className="font-semibold text-primary hover:underline">
+                      +601166767365
                     </a>
                   </li>
                   <li>Operating Hours: 9AM - 2PM (subject to availability)</li>

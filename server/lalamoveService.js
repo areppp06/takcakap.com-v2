@@ -276,6 +276,7 @@ const createOrder = async ({
           remarks: recipientRemarks || ''
         }
       ],
+      remarks: recipientRemarks || '',
       isPODEnabled: true,
       metadata: metadata || {}
     }

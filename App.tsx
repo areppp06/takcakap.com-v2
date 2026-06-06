@@ -19,6 +19,7 @@ import Login from './pages/Login';
 import AdminLogin from './pages/AdminLogin';
 import CompleteProfile from './pages/CompleteProfile';
 import PWAInstallBanner from './components/PWAInstallBanner';
+import { PushNotificationManager } from './components/PushNotificationManager';
 
 const PrivacyPolicy = React.lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
@@ -108,6 +109,7 @@ const App: React.FC = () => {
               <ScrollToTop />
               <AdminOrderAlertGate />
               <PWAInstallBanner />
+              <PushNotificationManager />
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/about-us" element={<AboutUs />} />

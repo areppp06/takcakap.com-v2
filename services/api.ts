@@ -53,9 +53,25 @@ const request = async <T>(path: string, options?: RequestInit, query?: Record<st
         headers
     });
     if (!response.ok) {
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+            const lastReload = Number(sessionStorage.getItem('pwa_502_reload_timestamp') || '0');
+            const now = Date.now();
+            
+            if (now - lastReload > 10000) { // 10 seconds cooldown
+                // Store reload attempt and force page refresh to trigger Cloudflare's worker redirect
+                sessionStorage.setItem('pwa_502_reload_timestamp', String(now));
+                window.location.href = window.location.href; // Better than reload() for some PWA edge cases
+                return new Promise(() => { }); // Halt execution of calling code
+            } else {
+                console.warn('⚠️ Prevented infinite reload loop due to persistent 502/503/504 error.');
+            }
+        }
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || payload.message || `Request failed: ${response.status}`);
     }
+
+    // Clear reload timestamp on any successful API response
+    sessionStorage.removeItem('pwa_502_reload_timestamp');
     return response.json() as Promise<T>;
 };
 
@@ -304,7 +320,7 @@ export const api = {
             try {
                 const payload = JSON.parse(text);
                 message = payload.error || payload.message || message;
-            } catch {}
+            } catch { }
             throw new Error(message);
         }
         return response.blob();
