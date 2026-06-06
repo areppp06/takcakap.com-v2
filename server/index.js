@@ -87,7 +87,7 @@ const LALAMOVE_API_SECRET = String(process.env.LALAMOVE_API_SECRET || '').trim()
 const LALAMOVE_WEBHOOK_SECRET = String(process.env.LALAMOVE_WEBHOOK_SECRET || '').trim();
 const LALAMOVE_DEFAULT_REMARK_TEMPLATE = String(
     process.env.LALAMOVE_DEFAULT_REMARK_TEMPLATE ||
-    'Order #{orderId} | {userName}'
+    'Order #{orderId}|{userName}|'
 ).trim();
 const LALAMOVE_REMARK_MAX_LENGTH = Math.max(
     80,

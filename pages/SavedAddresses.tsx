@@ -315,26 +315,15 @@ const SavedAddresses: React.FC = () => {
                         </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-semibold mb-1">Label</label>
-                            <input 
-                            type="text" 
-                            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                            placeholder="Home, Office..."
-                            value={formData.name}
-                            onChange={(e) => setFormData({...formData, name: e.target.value})}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold mb-1">Coordinates (Auto)</label>
-                            <input 
-                            type="text" 
-                            readOnly
-                            className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800/50 text-gray-500 cursor-not-allowed"
-                            value={`${formData.latitude.toFixed(5)}, ${formData.longitude.toFixed(5)}`}
-                            />
-                        </div>
+                    <div>
+                        <label className="block text-sm font-semibold mb-1">Label</label>
+                        <input 
+                        type="text" 
+                        className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                        placeholder="Home, Office..."
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        />
                     </div>
 
                     <div>
