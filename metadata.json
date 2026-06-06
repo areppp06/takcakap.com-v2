@@ -1,0 +1,7 @@
+{
+  "name": "TakCakap",
+  "description": "A full-stack designed food delivery application with user and admin portals, featuring MariaDB schema design.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

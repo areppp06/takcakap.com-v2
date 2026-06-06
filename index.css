@@ -1,0 +1,8 @@
+/* Global base stylesheet loaded by index.html. */
+html, body, #root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
