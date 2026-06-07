@@ -4521,6 +4521,10 @@ app.get('/api/notifications/vapid-public-key', (req, res) => {
     res.send(process.env.VAPID_PUBLIC_KEY || '');
 });
 
+app.get('/api/config/google', (req, res) => {
+    res.json({ googleClientId: GOOGLE_CLIENT_ID });
+});
+
 app.post('/api/notifications/subscribe', requireAuth, async (req, res) => {
     const userId = req.user.id;
     const { subscription } = req.body;

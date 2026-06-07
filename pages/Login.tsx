@@ -19,7 +19,27 @@ const Login: React.FC = () => {
   const [isBusy, setIsBusy] = useState(false);
 
   const nextPath = (location.state as any)?.from || '/';
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const [googleClientId, setGoogleClientId] = useState<string>(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+  );
+
+  useEffect(() => {
+    if (googleClientId) return;
+
+    fetch('/api/config/google')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.googleClientId) {
+          setGoogleClientId(data.googleClientId);
+          setError('');
+        } else {
+          setError('Google login is not configured. Missing VITE_GOOGLE_CLIENT_ID.');
+        }
+      })
+      .catch(() => {
+        setError('Google login is not configured. Missing VITE_GOOGLE_CLIENT_ID.');
+      });
+  }, [googleClientId]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -29,7 +49,7 @@ const Login: React.FC = () => {
 
   useEffect(() => {
     if (!googleClientId) {
-      setError('Google login is not configured. Missing VITE_GOOGLE_CLIENT_ID.');
+      // Don't show the error immediately while fetching
       return;
     }
 
