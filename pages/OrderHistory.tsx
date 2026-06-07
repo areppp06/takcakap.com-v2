@@ -279,7 +279,7 @@ const OrderHistory: React.FC = () => {
                         <div className="p-4 sm:p-6 bg-gray-50/50 dark:bg-white/5 border-b border-[#e7f4e7] dark:border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
                             <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-3">
-                                    <h3 className="font-bold text-lg">{order.id}</h3>
+                                    <h3 className="font-bold text-lg">{order.shortCode || order.id}</h3>
                                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${getStatusBadgeClass(order.status)}`}>
                                         {order.status}
                                     </span>
@@ -406,7 +406,7 @@ const OrderHistory: React.FC = () => {
               <div>
                 <h3 className="text-lg sm:text-xl font-extrabold">Reorder Summary</h3>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                  Order #{reorderPreview.orderId} • {reorderPreview.addableCount} item(s) can be added
+                  Order #{orders.find(o => o.id === reorderOrderId)?.shortCode || reorderPreview.orderId} • {reorderPreview.addableCount} item(s) can be added
                 </p>
               </div>
               <button

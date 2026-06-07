@@ -367,6 +367,7 @@ export const api = {
         request<{
             success: boolean;
             orderId: string;
+            shortCode?: string | null;
             externalOrderId?: string | null;
             trackingUrl?: string | null;
             lalamoveStatus?: string | null;

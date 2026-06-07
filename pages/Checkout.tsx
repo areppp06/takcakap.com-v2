@@ -470,6 +470,7 @@ const Checkout: React.FC = () => {
     (
       createdOrder: {
         orderId?: string | null;
+        shortCode?: string | null;
         trackingUrl?: string | null;
         externalOrderId?: string | null;
       },
@@ -477,7 +478,7 @@ const Checkout: React.FC = () => {
     ) => {
       navigate('/success', {
         state: {
-          orderId: createdOrder?.orderId || null,
+          orderId: createdOrder?.shortCode || createdOrder?.orderId || null,
           orderType: orderDetails.orderType,
           deliveryProvider: orderDetails.orderType === 'Delivery' ? 'Lalamove' : 'Internal',
           trackingUrl: createdOrder?.trackingUrl || null,
@@ -828,8 +829,8 @@ const Checkout: React.FC = () => {
       try {
         const quote = await api.getDeliveryQuote({
           addressLine: addr.addressLine,
-          latitude: addr.latitude,
-          longitude: addr.longitude,
+          latitude: addr.latitude ?? 0,
+          longitude: addr.longitude ?? 0,
           recipientName: activeUser.name,
           recipientPhone: addr.phone,
           note: addr.note,
@@ -1389,6 +1390,7 @@ const Checkout: React.FC = () => {
                         <label className="block text-sm font-semibold mb-1">Delivery Instructions (Optional)</label>
                         <input 
                           type="text" 
+                          maxLength={66}
                           className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                           placeholder="e.g. Leave at front desk"
                           value={newAddress.note}

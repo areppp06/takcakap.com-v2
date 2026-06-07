@@ -106,7 +106,7 @@ const ScanPay: React.FC = () => {
           await clearCart();
           navigate('/success', {
               state: {
-                  orderId: createdOrder?.orderId || createdOrder?.id || null,
+                  orderId: createdOrder?.shortCode || createdOrder?.orderId || null,
                   orderType: orderDetails.orderType,
                   deliveryProvider: orderDetails.orderType === 'Delivery' ? 'Lalamove' : 'Internal',
                   trackingUrl: createdOrder?.trackingUrl || null,

@@ -32,6 +32,7 @@ export type OrderStatus =
 
 export interface Order {
   id: string;
+  shortCode?: string | null;
   customerName: string;
   customerPhone?: string;
   customerAvatar?: string;
@@ -154,6 +155,7 @@ export interface AdminSalesOverview {
 
 export interface AdminCustomerOrder {
   id: string;
+  shortCode?: string | null;
   status: OrderStatus;
   orderType: 'Pickup' | 'Delivery';
   total: number;
@@ -198,6 +200,7 @@ export interface DeliveryQuote {
 export interface DeliveryOptions {
   pickupEnabled: boolean;
   lalamoveEnabled: boolean;
+  remarkMaxLength?: number;
 }
 
 export interface PaymentOptions {

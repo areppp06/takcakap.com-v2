@@ -351,6 +351,7 @@ const SavedAddresses: React.FC = () => {
                         <label className="block text-sm font-semibold mb-1">Delivery Instructions (Optional)</label>
                         <input 
                           type="text" 
+                          maxLength={66}
                           className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                           placeholder="e.g. Leave at front desk"
                           value={formData.note}

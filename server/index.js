@@ -232,19 +232,62 @@ const buildLalamoveDefaultRemark = ({ orderId, userName }) => {
     }
     return normalizedTemplate;
 };
-const buildLalamoveRecipientRemark = ({ orderId, userName, customerRemark }) => {
-    const defaultRemark = buildLalamoveDefaultRemark({ orderId, userName });
-    const normalizedCustomerRemark = normalizeRemarkText(customerRemark);
-    if (!normalizedCustomerRemark) {
-        return defaultRemark;
+const incrementPrefix = (prefix) => {
+    const chars = prefix.split('');
+    for (let i = chars.length - 1; i >= 0; i--) {
+        const charCode = chars[i].charCodeAt(0);
+        if (charCode < 90) { // 'Z' is 90
+            chars[i] = String.fromCharCode(charCode + 1);
+            break;
+        } else {
+            chars[i] = 'A';
+        }
+    }
+    return chars.join('');
+};
+
+const getNextOrderCode = (lastCode) => {
+    if (!lastCode) return 'AAA-001';
+    const parts = lastCode.split('-');
+    let prefix = parts[0];
+    let num = parseInt(parts[1], 10);
+
+    num += 1;
+    if (num > 999) {
+        num = 1;
+        prefix = incrementPrefix(prefix);
+    }
+    
+    const paddedNum = String(num).padStart(3, '0');
+    return `${prefix}-${paddedNum}`;
+};
+
+const buildLalamoveRecipientRemark = ({ shortCode, userName, customerRemark }) => {
+    const maxLimit = LALAMOVE_REMARK_MAX_LENGTH; // e.g. 80
+    const cleanCustomerRemark = normalizeRemarkText(customerRemark);
+    
+    // Parse the 3-digit suffix (e.g. "AAA-001" -> "001")
+    const codePart = String(shortCode || '').includes('-') 
+        ? String(shortCode).split('-')[1] 
+        : '000';
+
+    // Get first word of username truncated to 8 characters
+    const firstWord = String(userName || '').trim().split(/\s+/)[0] || 'Cust';
+    const truncatedUserName = firstWord.slice(0, 8);
+
+    // Prefix format: "#001-JohnD-"
+    const prefix = `#${codePart}-${truncatedUserName}-`;
+
+    if (!cleanCustomerRemark) {
+        return prefix.slice(0, -1);
     }
 
-    const separator = defaultRemark ? ' ' : '';
-    const availableCustomerLength = LALAMOVE_REMARK_MAX_LENGTH - defaultRemark.length - separator.length;
-    if (availableCustomerLength <= 0) {
-        return defaultRemark;
+    const availableSpace = maxLimit - prefix.length;
+    if (availableSpace > 0) {
+        return `${prefix}${cleanCustomerRemark.slice(0, availableSpace)}`;
     }
-    return `${defaultRemark}${separator}${normalizedCustomerRemark.slice(0, availableCustomerLength)}`;
+
+    return cleanCustomerRemark.slice(0, maxLimit);
 };
 const toUtcIsoString = (value) => {
     if (value === undefined || value === null) return null;
@@ -462,6 +505,7 @@ const formatOrderRowForClient = (o) => {
             }
             : {}),
         id: String(o.id),
+        shortCode: o.short_code || null,
         customerName: o.customer_name || 'Guest',
         customerAvatar: o.avatar_url,
         customerPhone:
@@ -2546,6 +2590,7 @@ const fetchOrderCreationProjectionByPaymentId = async (curlecPaymentId) => {
         `
             SELECT
                 id,
+                short_code,
                 external_order_id,
                 tracking_url,
                 lalamove_status,
@@ -2563,6 +2608,7 @@ const fetchOrderCreationProjectionByPaymentId = async (curlecPaymentId) => {
         success: true,
         idempotent: true,
         orderId: String(order.id),
+        shortCode: order.short_code || null,
         externalOrderId: order.external_order_id || null,
         trackingUrl: order.tracking_url || null,
         lalamoveStatus: order.lalamove_status || null,
@@ -2581,6 +2627,7 @@ const fetchOrderCreationProjectionByOrderId = async (orderId) => {
         `
             SELECT
                 id,
+                short_code,
                 external_order_id,
                 tracking_url,
                 lalamove_status,
@@ -2598,6 +2645,7 @@ const fetchOrderCreationProjectionByOrderId = async (orderId) => {
         success: true,
         idempotent: true,
         orderId: String(order.id),
+        shortCode: order.short_code || null,
         externalOrderId: order.external_order_id || null,
         trackingUrl: order.tracking_url || null,
         lalamoveStatus: order.lalamove_status || null,
@@ -5084,7 +5132,8 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
             whereConditions.push(
                 `(
                     ${idFromSearch ? 'o.id = ? OR' : ''}
-                    LOWER(COALESCE(u.name, '')) LIKE ?
+                    LOWER(COALESCE(o.short_code, '')) LIKE ?
+                    OR LOWER(COALESCE(u.name, '')) LIKE ?
                     OR LOWER(COALESCE(o.delivery_contact_phone, '')) LIKE ?
                     OR LOWER(COALESCE(u.phone_number, '')) LIKE ?
                     OR EXISTS (
@@ -5097,20 +5146,21 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
                 )`
             );
             if (idFromSearch) queryParams.push(idFromSearch);
-            queryParams.push(likeSearch, likeSearch, likeSearch, likeSearch);
+            queryParams.push(likeSearch, likeSearch, likeSearch, likeSearch, likeSearch);
         }
         if (cursor) {
             whereConditions.push('(o.created_at < ? OR (o.created_at = ? AND o.id < ?))');
             queryParams.push(cursor.createdAtSql, cursor.createdAtSql, cursor.id);
         }
-
+ 
         const whereClause = whereConditions.length ? `WHERE ${whereConditions.join(' AND ')}` : '';
         const queryLimit = Math.max(1, Number(limit || ADMIN_ORDERS_DEFAULT_LIMIT));
-
+ 
         const [orderRows] = await db.query(
             `
                 SELECT
                     o.id,
+                    o.short_code,
                     o.status,
                     o.total_amount,
                     o.created_at,
@@ -5365,6 +5415,7 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
             `
                 SELECT 
                     o.id,
+                    o.short_code,
                     o.status,
                     o.total_amount,
                     o.created_at,
@@ -5707,6 +5758,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     let connection = null;
     let hasTransaction = false;
     let orderId = null;
+    let orderCode = null;
     let normalizedItems = [];
     let deliveryQuoteReservation = null;
     let totalAmountMinorUnits = 0;
@@ -5981,6 +6033,13 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         persistedRecipientRemarks = snapshotNote || '';
         persistedDeliveryContactPhone = deliveryContactPhone || null;
 
+        // 0. Generate short_code sequentially
+        const [lastOrderRows] = await connection.query(
+            `SELECT short_code FROM orders ORDER BY id DESC LIMIT 1 FOR UPDATE`
+        );
+        const lastCode = lastOrderRows[0]?.short_code || null;
+        orderCode = getNextOrderCode(lastCode);
+
         // 1. Create Order
         const [orderResult] = await connection.query(
             `INSERT INTO orders (
@@ -6008,8 +6067,9 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 delivery_timing,
                 scheduled_at_utc,
                 lalamove_ongoing_at,
-                delivery_contact_phone
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                delivery_contact_phone,
+                short_code
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 resolvedUserId,
                 initialStatus,
@@ -6035,7 +6095,8 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 normalizedDeliveryTiming,
                 scheduledAtSql,
                 null,
-                persistedDeliveryContactPhone
+                persistedDeliveryContactPhone,
+                orderCode
             ]
         );
         orderId = orderResult.insertId;
@@ -6253,7 +6314,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                     recipientName: persistedRecipientName || 'Customer',
                     recipientPhone: persistedDeliveryContactPhone,
                     recipientRemarks: buildLalamoveRecipientRemark({
-                        orderId,
+                        shortCode: orderCode,
                         userName: persistedUserDisplayName || persistedRecipientName || 'Customer',
                         customerRemark: persistedRecipientRemarks || ''
                     }),
@@ -6412,6 +6473,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     return res.json({
         success: true,
         orderId: orderId.toString(),
+        shortCode: orderCode,
         externalOrderId: lalamoveOrder?.orderId || null,
         trackingUrl: lalamoveOrder?.shareLink || null,
         lalamoveStatus: responseLalamoveStatus,
@@ -6568,6 +6630,7 @@ app.get('/api/orders/:id/receipt', requireAuth, async (req, res) => {
             `
                 SELECT
                     o.id,
+                    o.short_code,
                     o.user_id,
                     o.status,
                     o.total_amount,
@@ -6633,7 +6696,7 @@ app.get('/api/orders/:id/receipt', requireAuth, async (req, res) => {
             hour12: false
         });
         const paymentMethodLabel = String(order.payment_method || 'DuitNow').trim() || 'DuitNow';
-        const receiptNumber = `FD-${String(order.id).padStart(6, '0')}`;
+        const receiptNumber = order.short_code || `FD-${String(order.id).padStart(6, '0')}`;
         const logoBuffer = await fetchImageBuffer(DEFAULT_BRAND_LOGO_URL);
 
         res.setHeader('Content-Type', 'application/pdf');

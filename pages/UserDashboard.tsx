@@ -156,7 +156,7 @@ const UserDashboard: React.FC = () => {
                       return (
                         <div key={order.id} className="rounded-xl border border-[#e7f4e7] dark:border-white/10 p-3 bg-background-light dark:bg-white/5 space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <p className="font-bold text-sm">#{order.id}</p>
+                            <p className="font-bold text-sm">#{order.shortCode || order.id}</p>
                             <div className="flex items-center gap-1.5">
                               <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${getStatusBadgeClass(order.status)}`}>
                                 {order.status}
@@ -214,7 +214,7 @@ const UserDashboard: React.FC = () => {
                                const scheduledLabel = getScheduledLabel(order);
                                return (
                                  <tr key={order.id} className="hover:bg-[#f8fcf8] dark:hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-4 font-semibold">{order.id}</td>
+                                    <td className="px-6 py-4 font-semibold">{order.shortCode || order.id}</td>
                                     <td className="px-6 py-4 text-sm">
                                       <div className="flex flex-col gap-1">
                                         <span>{order.date}</span>
