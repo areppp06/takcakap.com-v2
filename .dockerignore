@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.git
+.gradle
+android
+foodidash-takcakap-android-app-v2
+*.apk
+*.log
