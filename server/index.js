@@ -420,7 +420,12 @@ const triggerOrderPushNotification = async (orderId, reason) => {
                 title = 'Order Status Updated ℹ️';
                 body = `Your order #${displayCode} status has changed to ${status}.`;
             }
-        } else if (r === 'lalamove_webhook' || r === 'lalamove_sync') {
+        } else if (
+            r === 'lalamove_webhook' ||
+            r === 'lalamove_sync' ||
+            r === 'lalamove_booked' ||
+            ['Finding Rider', 'Rider OTW', 'Out For Delivery', 'Completed', 'Cancelled'].includes(r)
+        ) {
             notify = true;
             if (lalaStatus === 'ASSIGNING_DRIVER') {
                 title = 'Finding Rider 🛵';
@@ -7601,7 +7606,7 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
             emitOrdersChangedEvent({
                 source: 'lalamove_webhook',
                 orderId: existingOrder.id,
-                reason: mappedOrderStatus || 'status_update'
+                reason: 'lalamove_webhook'
             });
             if (mappedOrderStatus === 'Completed') {
                 emailService.queueOrderEventEmail(existingOrder.id, 'completed');
