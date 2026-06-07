@@ -664,14 +664,13 @@ const AdminMenu: React.FC = () => {
 
                        <div className="col-span-2">
                            <div className="flex justify-between items-center mb-1">
-                               <label className="block text-sm font-bold">Image URL / Upload</label>
+                               <label className="block text-sm font-bold">Image</label>
                                {isUploading && <span className="text-xs text-primary font-bold animate-pulse">Uploading to R2...</span>}
                            </div>
-                           <div className="flex gap-2 items-center">
-                               <input type="text" placeholder="Paste URL or upload image" className="flex-1 p-3 rounded-lg border dark:border-slate-700 dark:bg-slate-800" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} />
-                               <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-4 py-3 rounded-lg font-bold text-sm shrink-0 flex items-center gap-1 transition-all select-none">
+                           <div className="flex gap-3 items-center">
+                               <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-4 py-3 rounded-lg font-bold text-sm shrink-0 flex items-center gap-1.5 transition-all select-none">
                                    <span className="material-symbols-outlined text-lg">cloud_upload</span>
-                                   Upload
+                                   Upload Image
                                    <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
                                </label>
                                <div className="size-12 bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-slate-700">
