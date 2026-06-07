@@ -384,12 +384,13 @@ const normalizeAdminSearchQuery = (value) => {
 const triggerOrderPushNotification = async (orderId, reason) => {
     if (!orderId) return;
     try {
-        const [rows] = await db.query('SELECT user_id, status, lalamove_status FROM orders WHERE id = ?', [orderId]);
+        const [rows] = await db.query('SELECT user_id, status, lalamove_status, short_code FROM orders WHERE id = ?', [orderId]);
         if (!rows.length) return;
         const order = rows[0];
+        const displayCode = order.short_code || orderId;
 
         let title = 'TakCakap Order Update';
-        let body = `Your order #${orderId} status has changed.`;
+        let body = `Your order #${displayCode} status has changed.`;
         let notify = false;
 
         const status = String(order.status || '').trim();
@@ -400,13 +401,13 @@ const triggerOrderPushNotification = async (orderId, reason) => {
             notify = true;
             if (status === 'Processing') {
                 title = 'Order Processing 🍳';
-                body = `We have started preparing your order #${orderId}!`;
+                body = `We have started preparing your order #${displayCode}!`;
             } else if (status === 'Completed') {
                 title = 'Order Completed ✅';
-                body = `Your order #${orderId} has been completed. Enjoy!`;
+                body = `Your order #${displayCode} has been completed. Enjoy!`;
             } else if (status === 'Cancelled') {
                 title = 'Order Cancelled ❌';
-                body = `Your order #${orderId} has been cancelled.`;
+                body = `Your order #${displayCode} has been cancelled.`;
             }
         } else if (r === 'lalamove_webhook' || r === 'lalamove_sync') {
             notify = true;
@@ -429,12 +430,12 @@ const triggerOrderPushNotification = async (orderId, reason) => {
             notify = true;
             title = r === 'refund_processed' ? 'Refund Processed 💸' : 'Refund Failed ⚠️';
             body = r === 'refund_processed'
-                ? `A refund for order #${orderId} has been processed.`
-                : `A refund attempt for order #${orderId} failed.`;
+                ? `A refund for order #${displayCode} has been processed.`
+                : `A refund attempt for order #${displayCode} failed.`;
         } else if (r === 'payment_captured') {
             notify = true;
             title = 'Payment Successful 💰';
-            body = `Your payment for order #${orderId} was received.`;
+            body = `Your payment for order #${displayCode} was received.`;
         }
 
         if (notify) {
@@ -5523,6 +5524,7 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                     }
                     : {}),
                 id: o.id.toString(),
+                shortCode: o.short_code || null,
                 customerName: o.customer_name || 'Guest',
                 customerAvatar: o.avatar_url,
                 customerPhone:
