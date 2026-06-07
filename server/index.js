@@ -404,30 +404,39 @@ const triggerOrderPushNotification = async (orderId, reason) => {
 
         if (r.startsWith('status_') || r === 'cancelled') {
             notify = true;
-            if (status === 'Processing') {
-                title = 'Order Processing 🍳';
+            if (status === 'Preparing') {
+                title = 'Order Preparing 🍳';
                 body = `We have started preparing your order #${displayCode}!`;
+            } else if (status === 'Ready to Pickup') {
+                title = 'Ready to Pickup 🛍️';
+                body = `Your order #${displayCode} is ready for pick up!`;
             } else if (status === 'Completed') {
                 title = 'Order Completed ✅';
                 body = `Your order #${displayCode} has been completed. Enjoy!`;
             } else if (status === 'Cancelled') {
                 title = 'Order Cancelled ❌';
                 body = `Your order #${displayCode} has been cancelled.`;
+            } else {
+                title = 'Order Status Updated ℹ️';
+                body = `Your order #${displayCode} status has changed to ${status}.`;
             }
         } else if (r === 'lalamove_webhook' || r === 'lalamove_sync') {
             notify = true;
             if (lalaStatus === 'ASSIGNING_DRIVER') {
-                title = 'Looking for Rider 🛵';
-                body = 'We are finding a Lalamove rider for your delivery.';
+                title = 'Finding Rider 🛵';
+                body = `We are finding a Lalamove rider for your order #${displayCode}.`;
             } else if (lalaStatus === 'ON_GOING') {
-                title = 'Rider Found 🚀';
-                body = 'A Lalamove rider is heading to the store.';
+                title = 'Rider OTW (Picking Up) 🚀';
+                body = `A rider is on the way to pick up your order #${displayCode}.`;
             } else if (lalaStatus === 'PICKED_UP') {
                 title = 'Out for Delivery 🛵💨';
-                body = 'Your food is on the way!';
+                body = `Your order #${displayCode} is out for delivery!`;
             } else if (lalaStatus === 'CANCELED') {
                 title = 'Delivery Cancelled ⚠️';
-                body = 'The Lalamove delivery was cancelled.';
+                body = `The delivery for order #${displayCode} was cancelled.`;
+            } else if (lalaStatus === 'COMPLETED') {
+                title = 'Order Delivered 🏁';
+                body = `Your order #${displayCode} has been delivered. Enjoy!`;
             } else {
                 notify = false; // Don't notify on every small lalamove state change unless handled above
             }
@@ -3553,12 +3562,12 @@ app.get('/api/admin/sales/overview', requireAdmin, async (_req, res) => {
         const [rows] = await db.query(
             `
                 SELECT
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount ELSE 0 END), 0) AS daily_sales,
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount ELSE 0 END), 0) AS daily_sales_prev,
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount ELSE 0 END), 0) AS weekly_sales,
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount ELSE 0 END), 0) AS weekly_sales_prev,
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount ELSE 0 END), 0) AS monthly_sales,
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount ELSE 0 END), 0) AS monthly_sales_prev,
+                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount - COALESCE(refund_amount, 0) ELSE 0 END), 0) AS daily_sales,
+                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount - COALESCE(refund_amount, 0) ELSE 0 END), 0) AS daily_sales_prev,
+                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount - COALESCE(refund_amount, 0) ELSE 0 END), 0) AS weekly_sales,
+                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount - COALESCE(refund_amount, 0) ELSE 0 END), 0) AS weekly_sales_prev,
+                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount - COALESCE(refund_amount, 0) ELSE 0 END), 0) AS monthly_sales,
+                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN total_amount - COALESCE(refund_amount, 0) ELSE 0 END), 0) AS monthly_sales_prev,
                     COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS daily_orders,
                     COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS weekly_orders,
                     COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS monthly_orders
@@ -3672,6 +3681,7 @@ app.get('/api/admin/sales/report.csv', requireAdmin, async (req, res) => {
                     o.order_type,
                     o.payment_method,
                     o.total_amount,
+                    o.refund_amount,
                     o.delivery_fee,
                     o.delivery_currency,
                     o.delivery_provider,
@@ -3690,12 +3700,12 @@ app.get('/api/admin/sales/report.csv', requireAdmin, async (req, res) => {
                     u.email AS customer_email,
                     (
                         SELECT GROUP_CONCAT(
-                            CONCAT(
+                             CONCAT(
                                 oi.quantity,
                                 'x ',
                                 COALESCE(NULLIF(TRIM(oi.item_name_snapshot), ''), m.name, CONCAT('Menu Item #', oi.menu_item_id))
-                            )
-                            SEPARATOR '; '
+                             )
+                             SEPARATOR '; '
                         )
                         FROM order_items oi
                         LEFT JOIN menu_items m ON m.id = oi.menu_item_id
@@ -3735,6 +3745,8 @@ app.get('/api/admin/sales/report.csv', requireAdmin, async (req, res) => {
             'Scheduled At (MYT)',
             'Delivery Fee',
             'Total Amount',
+            'Refund Amount',
+            'Net Amount',
             'Currency'
         ];
 
@@ -3778,6 +3790,8 @@ app.get('/api/admin/sales/report.csv', requireAdmin, async (req, res) => {
                 scheduledMyt,
                 Number(row.delivery_fee || 0).toFixed(2),
                 Number(row.total_amount || 0).toFixed(2),
+                Number(row.refund_amount || 0).toFixed(2),
+                Number((row.total_amount || 0) - (row.refund_amount || 0)).toFixed(2),
                 row.delivery_currency || 'MYR'
             ];
             csvLines.push(values.map(toCsvValue).join(','));
@@ -4295,7 +4309,7 @@ app.post('/api/delivery/quote', requireAuth, async (req, res) => {
             dropoffAddress: addressLine,
             dropoffLat: normalizedLat,
             dropoffLng: normalizedLng,
-            dropoffNote: note,
+            dropoffNote: String(note || '').trim().slice(0, 66),
             scheduleAt: parsedSchedule.value || undefined,
             store: {
                 name: shopStatus.storeName,
@@ -4402,12 +4416,13 @@ app.post('/api/addresses', requireAuth, async (req, res) => {
         const normalizedLat = roundCoordinate(lat);
         const normalizedLng = roundCoordinate(lng);
 
+        const trimmedNote = String(note || '').trim().slice(0, 66);
         const [result] = await db.query(
             `
                 INSERT INTO user_addresses (user_id, name, address_line, phone, note, latitude, longitude)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             `,
-            [userId, name, addressLine, normalizedPhone, note || '', normalizedLat, normalizedLng]
+            [userId, name, addressLine, normalizedPhone, trimmedNote, normalizedLat, normalizedLng]
         );
 
         return res.status(201).json({
@@ -4415,7 +4430,7 @@ app.post('/api/addresses', requireAuth, async (req, res) => {
             name,
             addressLine,
             phone: normalizedPhone,
-            note: note || '',
+            note: trimmedNote,
             latitude: normalizedLat === null ? undefined : normalizedLat,
             longitude: normalizedLng === null ? undefined : normalizedLng
         });
@@ -4459,7 +4474,7 @@ app.put('/api/addresses/:id', requireAuth, async (req, res) => {
         }
         if (note !== undefined) {
             fields.push('note = ?');
-            values.push(note);
+            values.push(String(note || '').trim().slice(0, 66));
         }
         if (latitude !== undefined || longitude !== undefined) {
             if (latitude === undefined || longitude === undefined) {
@@ -5847,7 +5862,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         const profilePhone = String(userRows[0]?.phone_number || '').trim();
         const snapshotLabel = String(addressSnapshot?.label || '').trim();
         const snapshotAddressLine = String(addressSnapshot?.addressLine || address || '').trim();
-        const snapshotNote = String(addressSnapshot?.note || recipient?.remarks || '').trim();
+        const snapshotNote = String(addressSnapshot?.note || recipient?.remarks || '').trim().slice(0, 66);
         const rawSnapshotLatitude = toNumber(addressSnapshot?.latitude);
         const rawSnapshotLongitude = toNumber(addressSnapshot?.longitude);
         const snapshotLatitude = isValidLatitude(rawSnapshotLatitude) ? roundCoordinate(rawSnapshotLatitude) : null;

@@ -10,6 +10,18 @@ import { formatCurrency } from '../utils/currency';
 import AppHeader, { HeaderAvatarLink, HeaderCartLink } from '../components/AppHeader';
 import BrandLogo from '../components/BrandLogo';
 
+const formatTimeLabel = (hhmm?: string) => {
+  if (!hhmm) return '';
+  const parts = hhmm.split(':');
+  if (parts.length < 2) return hhmm;
+  const h = parseInt(parts[0], 10);
+  const m = parts[1];
+  if (isNaN(h)) return hhmm;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m} ${ampm}`;
+};
+
 type NoticeType = 'success' | 'error';
 
 const Home: React.FC = () => {
@@ -292,8 +304,7 @@ const Home: React.FC = () => {
               <div className="mt-5 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <h3 className="text-sm font-bold text-background-dark dark:text-white">Address</h3>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                  Medan Seleraneka Perda Gerai No.1, 2, Taman IKS Bukit Minyak, Lorong IKS Bukit Minyak 1 Seberang Perai Tengah, Pulau Pinang,
-                  14000
+                  {shopStatus?.storeAddress || 'Medan Seleraneka Perda Gerai No.1, 2, Taman IKS Bukit Minyak, Lorong IKS Bukit Minyak 1 Seberang Perai Tengah, Pulau Pinang, 14000'}
                 </p>
                 <a
                   href="https://maps.app.goo.gl/a317c4eDuQMY9G2L8"
@@ -317,11 +328,11 @@ const Home: React.FC = () => {
                   </li>
                   <li>
                     Phone:{' '}
-                    <a href="tel:+601166767365" className="font-semibold text-primary hover:underline">
-                      +601166767365
+                    <a href={`tel:${shopStatus?.storePhone || '+601166767365'}`} className="font-semibold text-primary hover:underline">
+                      {shopStatus?.storePhone || '+601166767365'}
                     </a>
                   </li>
-                  <li>Operating Hours: 9AM - 2PM (subject to availability)</li>
+                  <li>Operating Hours: {shopStatus ? `${formatTimeLabel(shopStatus.openTime)} - ${formatTimeLabel(shopStatus.closeTime)}` : '9AM - 2PM'} (subject to availability)</li>
                 </ul>
               </div>
 

@@ -1,8 +1,23 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
+import { api } from '../services/api';
+import { ShopStatus } from '../types';
 
 const PrivacyPolicy: React.FC = () => {
+  const [shopStatus, setShopStatus] = useState<ShopStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getShopStatus()
+      .then((status) => {
+        if (!cancelled) setShopStatus(status);
+      })
+      .catch((err) => console.error('Failed to load shop status in PrivacyPolicy', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-[#fcfbff] to-[#f4fff4] px-4 py-8 sm:py-12">
       <main className="mx-auto max-w-4xl">
@@ -190,7 +205,7 @@ const PrivacyPolicy: React.FC = () => {
               <ul className="mt-2 list-none space-y-1 pl-0">
                 <li><span className="font-semibold">Business Name:</span> DE WARISAN IBUNDA ENTERPRISE</li>
                 <li><span className="font-semibold">Email:</span> support@takcakap.com</li>
-                <li><span className="font-semibold">Phone:</span> +601166767365</li>
+                <li><span className="font-semibold">Phone:</span> {shopStatus?.storePhone || '+601166767365'}</li>
               </ul>
             </div>
           </section>

@@ -1387,7 +1387,10 @@ const Checkout: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-semibold mb-1">Delivery Instructions (Optional)</label>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-sm font-semibold">Delivery Instructions (Optional)</label>
+                            <span className="text-xs text-gray-400">{(newAddress.note || '').length}/66</span>
+                        </div>
                         <input 
                           type="text" 
                           maxLength={66}
