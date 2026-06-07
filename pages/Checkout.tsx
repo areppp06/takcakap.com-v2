@@ -1366,10 +1366,12 @@ const Checkout: React.FC = () => {
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-semibold mb-1">
-                          House No. , Unit or Block
-                        </label>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-sm font-semibold">House No. , Unit or Block</label>
+                            <span className="text-xs text-gray-400">{(newAddress.addressLine || '').length}/200</span>
+                        </div>
                         <textarea 
+                          maxLength={200}
                           className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none h-20"
                           placeholder="e.g. B-12-3, Block B, Vista Residence"
                           value={newAddress.addressLine}

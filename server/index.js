@@ -4306,7 +4306,7 @@ app.post('/api/delivery/quote', requireAuth, async (req, res) => {
         }
 
         const quotation = await lalamoveService.createQuotation({
-            dropoffAddress: addressLine,
+            dropoffAddress: String(addressLine || '').trim().slice(0, 200),
             dropoffLat: normalizedLat,
             dropoffLng: normalizedLng,
             dropoffNote: String(note || '').trim().slice(0, 66),
@@ -4394,8 +4394,9 @@ app.post('/api/addresses', requireAuth, async (req, res) => {
         const userId = req.user.id;
         const { name, addressLine, phone, note, latitude, longitude } = req.body || {};
         const trimmedPhone = String(phone || '').trim();
+        const trimmedAddressLine = String(addressLine || '').trim().slice(0, 200);
 
-        if (!name || !addressLine || !trimmedPhone) {
+        if (!name || !trimmedAddressLine || !trimmedPhone) {
             return res.status(400).json({ error: 'name, addressLine, and phone are required' });
         }
         const normalizedPhone = lalamoveService.normalizePhone(trimmedPhone);
@@ -4422,13 +4423,13 @@ app.post('/api/addresses', requireAuth, async (req, res) => {
                 INSERT INTO user_addresses (user_id, name, address_line, phone, note, latitude, longitude)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             `,
-            [userId, name, addressLine, normalizedPhone, trimmedNote, normalizedLat, normalizedLng]
+            [userId, name, trimmedAddressLine, normalizedPhone, trimmedNote, normalizedLat, normalizedLng]
         );
 
         return res.status(201).json({
             id: String(result.insertId),
             name,
-            addressLine,
+            addressLine: trimmedAddressLine,
             phone: normalizedPhone,
             note: trimmedNote,
             latitude: normalizedLat === null ? undefined : normalizedLat,
@@ -4457,8 +4458,12 @@ app.put('/api/addresses/:id', requireAuth, async (req, res) => {
             values.push(name);
         }
         if (addressLine !== undefined) {
+            const trimmedAddressLine = String(addressLine || '').trim().slice(0, 200);
+            if (!trimmedAddressLine) {
+                return res.status(400).json({ error: 'addressLine is required' });
+            }
             fields.push('address_line = ?');
-            values.push(addressLine);
+            values.push(trimmedAddressLine);
         }
         if (phone !== undefined) {
             const trimmedPhone = String(phone || '').trim();
@@ -5861,7 +5866,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         const profileName = String(userRows[0]?.name || '').trim();
         const profilePhone = String(userRows[0]?.phone_number || '').trim();
         const snapshotLabel = String(addressSnapshot?.label || '').trim();
-        const snapshotAddressLine = String(addressSnapshot?.addressLine || address || '').trim();
+        const snapshotAddressLine = String(addressSnapshot?.addressLine || address || '').trim().slice(0, 200);
         const snapshotNote = String(addressSnapshot?.note || recipient?.remarks || '').trim().slice(0, 66);
         const rawSnapshotLatitude = toNumber(addressSnapshot?.latitude);
         const rawSnapshotLongitude = toNumber(addressSnapshot?.longitude);
