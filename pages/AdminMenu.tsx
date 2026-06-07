@@ -36,6 +36,17 @@ const AdminMenu: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+
+  const closeModal = () => {
+      if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl('');
+      }
+      setSelectedFile(null);
+      setIsModalOpen(false);
+  };
 
   // Drag and Drop refs
   const dragItem = useRef<DragPosition | null>(null);
@@ -58,19 +69,31 @@ const AdminMenu: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    try {
-      const result = await api.uploadImage(file);
-      if (result.success && result.url) {
-        setFormData((prev) => ({ ...prev, image: result.url }));
-      } else {
-        throw new Error('Image upload failed');
+    if (!editingItem) {
+      // For NEW items: defer upload until save to prevent orphaned files in R2 on cancel
+      setSelectedFile(file);
+      const objectUrl = URL.createObjectURL(file);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
-    } catch (error: any) {
-      console.error('[Upload] Error:', error);
-      alert(error.message || 'Error uploading file. Make sure Cloudflare R2 is configured.');
-    } finally {
-      setIsUploading(false);
+      setPreviewUrl(objectUrl);
+      setFormData((prev) => ({ ...prev, image: objectUrl }));
+    } else {
+      // For EDITING items: upload immediately
+      setIsUploading(true);
+      try {
+        const result = await api.uploadImage(file);
+        if (result.success && result.url) {
+          setFormData((prev) => ({ ...prev, image: result.url }));
+        } else {
+          throw new Error('Image upload failed');
+        }
+      } catch (error: any) {
+        console.error('[Upload] Error:', error);
+        alert(error.message || 'Error uploading file. Make sure Cloudflare R2 is configured.');
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -185,6 +208,12 @@ const AdminMenu: React.FC = () => {
   }, []);
 
   const handleOpenModal = (item?: MenuItem) => {
+      if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl('');
+      }
+      setSelectedFile(null);
+
       if (item) {
           setEditingItem(item);
           const resolvedCategoryId =
@@ -225,11 +254,36 @@ const AdminMenu: React.FC = () => {
       const categoryName = selectedCategory ? selectedCategory.name : 'Uncategorized';
 
       const normalizedStock = Math.max(0, Math.floor(Number(formData.stock) || 0));
+      
+      let finalImageUrl = formData.image;
+      if (!editingItem && selectedFile) {
+          setIsUploading(true);
+          try {
+              const result = await api.uploadImage(selectedFile);
+              if (result.success && result.url) {
+                  finalImageUrl = result.url;
+              } else {
+                  throw new Error('Image upload failed');
+              }
+          } catch (error: any) {
+              console.error('[Save/Upload] Error:', error);
+              alert(error.message || 'Error uploading image to R2 on save.');
+              setIsUploading(false);
+              return;
+          } finally {
+              setIsUploading(false);
+          }
+      }
+
       const payload = {
-          ...formData,
+          name: formData.name,
+          description: formData.description,
           price: parseFloat(formData.price),
+          image: finalImageUrl,
+          category_id: formData.category_id,
           stock: normalizedStock,
-          category: categoryName // Include the name for strict typing
+          isActive: formData.isActive,
+          category: categoryName
       };
 
       try {
@@ -238,7 +292,7 @@ const AdminMenu: React.FC = () => {
           } else {
               await api.addMenuItem(payload);
           }
-          setIsModalOpen(false);
+          closeModal();
           await loadData();
       } catch (e) {
           console.error('Save failed', e);
@@ -561,11 +615,11 @@ const AdminMenu: React.FC = () => {
        {/* Add/Edit Modal */}
        {isModalOpen && (
            <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)} />
+               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={closeModal} />
                <div className="relative bg-white dark:bg-zinc-900 w-full max-w-2xl p-6 rounded-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
                    <div className="flex justify-between items-center">
                        <h3 className="text-2xl font-bold">{editingItem ? 'Edit Item' : 'New Menu Item'}</h3>
-                       <button onClick={() => setIsModalOpen(false)}><span className="material-symbols-outlined">close</span></button>
+                       <button onClick={closeModal}><span className="material-symbols-outlined">close</span></button>
                    </div>
 
                    <div className="grid md:grid-cols-2 gap-4">
@@ -639,7 +693,7 @@ const AdminMenu: React.FC = () => {
                    </div>
 
                    <div className="flex gap-3 mt-4">
-                       <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 rounded-xl font-bold">Cancel</button>
+                       <button onClick={closeModal} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 rounded-xl font-bold">Cancel</button>
                        <button onClick={handleSave} className="flex-1 py-3 bg-primary text-white rounded-xl font-bold">Save Item</button>
                    </div>
                </div>
