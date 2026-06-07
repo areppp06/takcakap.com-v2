@@ -30,7 +30,7 @@ module.exports.up = async ({ connection, logger = console }) => {
     if (rows.length > 0) {
         const constraintName = rows[0].CONSTRAINT_NAME;
         logger.info?.(`[migrations] Dropping foreign key constraint: ${constraintName}`);
-        await connection.query(`ALTER TABLE order_items DROP FOREIGN KEY ${constraintName}`);
+        await connection.query(`ALTER TABLE order_items DROP FOREIGN KEY \`${constraintName}\``);
     } else {
         logger.info?.('[migrations] No existing constraint found referencing menu_items(id)');
     }
