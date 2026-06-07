@@ -20,6 +20,7 @@ import AdminLogin from './pages/AdminLogin';
 import CompleteProfile from './pages/CompleteProfile';
 import PWAInstallBanner from './components/PWAInstallBanner';
 import { PushNotificationManager } from './components/PushNotificationManager';
+import { NativeAppManager } from './components/NativeAppManager';
 
 const PrivacyPolicy = React.lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
@@ -51,6 +52,46 @@ const SuspensePage: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   <React.Suspense fallback={<RouteLoadingFallback />}>{children}</React.Suspense>
 );
 
+const isAdminSubdomain = (): boolean => {
+  const host = window.location.hostname;
+  const port = window.location.port;
+  return (
+    host.startsWith('admin.') ||
+    host.startsWith('manage.') ||
+    host.includes('admin.takcakap') ||
+    port === '5174'
+  );
+};
+
+const RedirectToAdminSubdomain: React.FC = () => {
+  React.useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocal) {
+      window.location.href = 'http://localhost:5174';
+    } else {
+      window.location.href = 'https://admin.takcakap.com';
+    }
+  }, []);
+  return <div className="min-h-screen flex items-center justify-center text-gray-500">Redirecting to Admin Panel...</div>;
+};
+
+const RequireAdminAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center text-gray-500">Checking session...</div>;
+  }
+  if (!isAuthenticated) {
+    const loginPath = isAdminSubdomain() ? "/login" : "/admin/login";
+    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
+  }
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
+
 const RequireUserAuth: React.FC<{ children: React.ReactElement; requirePhone?: boolean }> = ({ children, requirePhone = false }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
@@ -73,22 +114,6 @@ const RequireUserAuth: React.FC<{ children: React.ReactElement; requirePhone?: b
   return children;
 };
 
-const RequireAdminAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">Checking session...</div>;
-  }
-  if (!isAuthenticated) {
-    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
-  }
-  if (user?.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-};
-
 const AdminOrderAlertGate: React.FC = () => {
   const { user, isLoading } = useAuth();
   if (isLoading || user?.role !== 'admin') return null;
@@ -100,6 +125,44 @@ const AdminOrderAlertGate: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const adminMode = isAdminSubdomain();
+
+  if (adminMode) {
+    return (
+      <AuthProvider>
+        <Router>
+          <ScrollToTop />
+          <AdminOrderAlertGate />
+          <NativeAppManager />
+          <Routes>
+            <Route path="/" element={<RequireAdminAuth><SuspensePage><AdminDashboard /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/login" element={<AdminLogin />} />
+            <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+            <Route path="/manage-shop" element={<RequireAdminAuth><SuspensePage><AdminManageShop /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/customers" element={<RequireAdminAuth><SuspensePage><AdminCustomers /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/orders" element={<RequireAdminAuth><SuspensePage><AdminOrders /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/categories" element={<RequireAdminAuth><SuspensePage><AdminCategories /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/menu" element={<RequireAdminAuth><SuspensePage><AdminMenu /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/delivery-options" element={<RequireAdminAuth><SuspensePage><AdminDeliveryOptions /></SuspensePage></RequireAdminAuth>} />
+            <Route path="/payment-options" element={<RequireAdminAuth><SuspensePage><AdminPaymentOptions /></SuspensePage></RequireAdminAuth>} />
+            
+            {/* Backward compatibility support for /admin path prefixes in subdomain */}
+            <Route path="/admin" element={<Navigate to="/" replace />} />
+            <Route path="/admin/manage-shop" element={<Navigate to="/manage-shop" replace />} />
+            <Route path="/admin/customers" element={<Navigate to="/customers" replace />} />
+            <Route path="/admin/orders" element={<Navigate to="/orders" replace />} />
+            <Route path="/admin/categories" element={<Navigate to="/categories" replace />} />
+            <Route path="/admin/menu" element={<Navigate to="/menu" replace />} />
+            <Route path="/admin/delivery-options" element={<Navigate to="/delivery-options" replace />} />
+            <Route path="/admin/payment-options" element={<Navigate to="/payment-options" replace />} />
+            
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    );
+  }
+
   return (
     <AuthProvider>
       <AddressProvider>
@@ -119,8 +182,12 @@ const App: React.FC = () => {
                 <Route path="/refund-replacement-policy" element={<SuspensePage><RefundReplacementPolicy /></SuspensePage>} />
                 <Route path="/delivery-policy" element={<SuspensePage><DeliveryPolicy /></SuspensePage>} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/admin/login" element={<AdminLogin />} />
-                <Route path="/admin/api" element={<Navigate to="/admin" replace />} />
+                
+                {/* Redirect admin access on storefront domain to the subdomain */}
+                <Route path="/admin/login" element={<RedirectToAdminSubdomain />} />
+                <Route path="/admin" element={<RedirectToAdminSubdomain />} />
+                <Route path="/admin/*" element={<RedirectToAdminSubdomain />} />
+                
                 <Route path="/dashboard" element={<RequireUserAuth><UserDashboard /></RequireUserAuth>} />
                 <Route path="/orders" element={<RequireUserAuth><OrderHistory /></RequireUserAuth>} />
                 <Route path="/addresses" element={<RequireUserAuth><SavedAddresses /></RequireUserAuth>} />
@@ -130,14 +197,6 @@ const App: React.FC = () => {
                 <Route path="/scan-pay" element={<RequireUserAuth requirePhone><ScanPay /></RequireUserAuth>} />
                 <Route path="/success" element={<RequireUserAuth><OrderSuccess /></RequireUserAuth>} />
                 <Route path="/failed" element={<OrderFailed />} />
-                <Route path="/admin" element={<RequireAdminAuth><SuspensePage><AdminDashboard /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/manage-shop" element={<RequireAdminAuth><SuspensePage><AdminManageShop /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/customers" element={<RequireAdminAuth><SuspensePage><AdminCustomers /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/orders" element={<RequireAdminAuth><SuspensePage><AdminOrders /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/categories" element={<RequireAdminAuth><SuspensePage><AdminCategories /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/menu" element={<RequireAdminAuth><SuspensePage><AdminMenu /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/delivery-options" element={<RequireAdminAuth><SuspensePage><AdminDeliveryOptions /></SuspensePage></RequireAdminAuth>} />
-                <Route path="/admin/payment-options" element={<RequireAdminAuth><SuspensePage><AdminPaymentOptions /></SuspensePage></RequireAdminAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Router>

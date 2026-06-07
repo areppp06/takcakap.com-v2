@@ -177,6 +177,15 @@ export const api = {
                 body: JSON.stringify({ email, password })
             }
         ),
+    registerAdminFcmToken: async (token: string): Promise<{ success: boolean }> =>
+        request<{ success: boolean }>(
+            adminApiPath('/admin/fcm-token'),
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            }
+        ),
     getMe: async (): Promise<{ user: any }> => request<{ user: any }>('/auth/me'),
     updateMyAccount: async (payload: { name?: string; phoneNumber?: string }): Promise<{ success: boolean; user?: any }> =>
         request<{ success: boolean; user?: any }>(

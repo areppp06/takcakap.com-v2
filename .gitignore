@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Android app wrapper builds and folders
+foodidash-takcakap-android-app-v2/
+takcakap-admin-apk/
+*.apk

@@ -22,7 +22,7 @@ const db = require('./db');
 const lalamoveService = require('./lalamoveService');
 const emailService = require('./emailService');
 const { assertNoPendingMigrations } = require('./migrationRunner');
-const { sendPushToUser } = require('./pushService');
+const { sendPushToUser, sendFcmToAdmins } = require('./pushService');
 const multer = require('multer');
 const r2Service = require('./r2Service');
 
@@ -119,6 +119,11 @@ const CORS_ORIGINS = String(process.env.CORS_ORIGINS || '')
     .filter(Boolean);
 const normalizeCorsOrigin = (origin) => String(origin || '').trim().replace(/\/+$/, '').toLowerCase();
 const CORS_ORIGIN_SET = new Set(CORS_ORIGINS.map((origin) => normalizeCorsOrigin(origin)).filter(Boolean));
+
+// Dynamically add configurable dev admin origins based on ADMIN_PORT from .env
+const ADMIN_PORT = process.env.ADMIN_PORT || '5174';
+CORS_ORIGIN_SET.add(normalizeCorsOrigin(`http://localhost:${ADMIN_PORT}`));
+CORS_ORIGIN_SET.add(normalizeCorsOrigin(`http://127.0.0.1:${ADMIN_PORT}`));
 const CURLEC_CALLBACK_TRUSTED_ORIGINS = new Set(
     ['https://api.razorpay.com', 'https://checkout.razorpay.com'].map((origin) => normalizeCorsOrigin(origin))
 );
@@ -459,6 +464,20 @@ const emitOrdersChangedEvent = ({ source = 'system', orderId = null, reason = ''
 
     // Trigger push notification asynchronously
     triggerOrderPushNotification(payload.orderId, payload.reason).catch(() => { });
+
+    // Trigger Admin FCM Push Notification for new orders
+    if (payload.orderId && (payload.reason === 'created' || payload.reason === 'payment_captured')) {
+        db.query('SELECT short_code FROM orders WHERE id = ?', [payload.orderId]).then(([rows]) => {
+            if (rows.length > 0) {
+                const displayCode = rows[0].short_code || payload.orderId;
+                sendFcmToAdmins(
+                    'NEW ORDER! 🚨',
+                    `Order #${displayCode} has arrived! Open the app to view and accept.`,
+                    { type: 'new_order', orderId: String(payload.orderId) }
+                ).catch(() => { });
+            }
+        }).catch(() => { });
+    }
 };
 const formatOrderRowForClient = (o) => {
     const cancelState = computeLalamoveCancelState({
@@ -5316,6 +5335,46 @@ app.post('/api/admin/orders/stream-token', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Failed to issue admin stream token:', error);
         return res.status(500).json({ error: 'Failed to issue admin stream token' });
+    }
+});
+
+app.post('/api/admin/fcm-token', requireAdmin, async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ error: 'Token is required' });
+        }
+        
+        // Upsert the token
+        await db.query(`
+            INSERT INTO admin_fcm_tokens (token) VALUES (?)
+            ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+        `, [token]);
+        
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Failed to register admin FCM token:', error);
+        return res.status(500).json({ error: 'Failed to register admin FCM token' });
+    }
+});
+
+// DEBUG: Test FCM push to all registered admin devices
+app.post('/api/admin/fcm-test', requireAdmin, async (req, res) => {
+    try {
+        console.log('🧪 FCM TEST: Manually triggering test push to all admin devices...');
+        const [rows] = await db.query('SELECT token FROM admin_fcm_tokens');
+        console.log(`🧪 FCM TEST: Found ${rows.length} token(s) in database`);
+        rows.forEach((r, i) => console.log(`  Token[${i}]: ${r.token.substring(0, 20)}...`));
+        
+        await sendFcmToAdmins(
+            'TEST ALARM 🧪',
+            'This is a test notification. You should hear a looping alarm!',
+            { type: 'new_order', orderId: '0' }
+        );
+        return res.json({ success: true, tokenCount: rows.length });
+    } catch (error) {
+        console.error('FCM TEST failed:', error);
+        return res.status(500).json({ error: error.message });
     }
 });
 
