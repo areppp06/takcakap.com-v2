@@ -2834,7 +2834,8 @@ const fetchCartForUser = async (userId) => {
                 m.image_url,
                 m.stock,
                 m.is_active,
-                c.name as category_name
+                c.name as category_name,
+                c.is_active as category_is_active
             FROM cart_items ci
             JOIN menu_items m ON m.id = ci.menu_item_id
             LEFT JOIN categories c ON c.id = m.category_id
@@ -2852,7 +2853,7 @@ const fetchCartForUser = async (userId) => {
         image: row.image_url,
         category: row.category_name || 'Uncategorized',
         stock: row.stock,
-        isActive: Boolean(row.is_active),
+        isActive: Boolean(row.is_active) && (row.category_is_active === null || Boolean(row.category_is_active)),
         quantity: row.quantity
     }));
 };
@@ -2888,9 +2889,11 @@ const buildReorderPreview = async (executor, { userId, orderId }) => {
                 m.name AS menu_name,
                 m.image_url,
                 m.stock,
-                m.is_active
+                m.is_active,
+                c.is_active as category_is_active
             FROM order_items oi
             LEFT JOIN menu_items m ON m.id = oi.menu_item_id
+            LEFT JOIN categories c ON c.id = m.category_id
             WHERE oi.order_id = ?
             ORDER BY oi.id ASC
         `,
@@ -2916,7 +2919,7 @@ const buildReorderPreview = async (executor, { userId, orderId }) => {
         const name = snapshotName || liveName || `Menu Item #${menuItemId || 'Unknown'}`;
         const image = row.image_url || '';
         const stock = Number(row.stock || 0);
-        const isActive = Boolean(row.is_active);
+        const isActive = Boolean(row.is_active) && (row.category_is_active === null || Boolean(row.category_is_active));
 
         if (!liveName) {
             unavailableItems.push({
@@ -4623,7 +4626,13 @@ app.post('/api/cart/items', requireAuth, async (req, res) => {
         await syncCartWithStock(db, userId);
 
         const [menuRows] = await db.query(
-            'SELECT id, stock, is_active FROM menu_items WHERE id = ? LIMIT 1',
+            `
+                SELECT m.id, m.stock, m.is_active, c.is_active as category_is_active 
+                FROM menu_items m
+                LEFT JOIN categories c ON c.id = m.category_id
+                WHERE m.id = ? 
+                LIMIT 1
+            `,
             [menuItemId]
         );
         if (menuRows.length === 0) {
@@ -4631,7 +4640,8 @@ app.post('/api/cart/items', requireAuth, async (req, res) => {
         }
         const menuItem = menuRows[0];
         const availableStock = Number(menuItem.stock || 0);
-        if (!menuItem.is_active || availableStock <= 0) {
+        const isItemActive = menuItem.is_active && (menuItem.category_is_active === null || Boolean(menuItem.category_is_active));
+        if (!isItemActive || availableStock <= 0) {
             return res.status(400).json({ error: 'This item is out of stock' });
         }
 
@@ -4688,7 +4698,13 @@ app.put('/api/cart/items/:menuItemId', requireAuth, async (req, res) => {
             );
         } else {
             const [menuRows] = await db.query(
-                'SELECT id, stock, is_active FROM menu_items WHERE id = ? LIMIT 1',
+                `
+                    SELECT m.id, m.stock, m.is_active, c.is_active as category_is_active 
+                    FROM menu_items m
+                    LEFT JOIN categories c ON c.id = m.category_id
+                    WHERE m.id = ? 
+                    LIMIT 1
+                `,
                 [menuItemId]
             );
             if (menuRows.length === 0) {
@@ -4696,7 +4712,8 @@ app.put('/api/cart/items/:menuItemId', requireAuth, async (req, res) => {
             }
             const menuItem = menuRows[0];
             const availableStock = Number(menuItem.stock || 0);
-            if (!menuItem.is_active || availableStock <= 0) {
+            const isItemActive = menuItem.is_active && (menuItem.category_is_active === null || Boolean(menuItem.category_is_active));
+            if (!isItemActive || availableStock <= 0) {
                 return res.status(400).json({ error: 'This item is out of stock' });
             }
             const normalizedQuantity = Math.floor(quantity);
@@ -4779,7 +4796,8 @@ app.get('/api/categories', async (req, res) => {
             id: row.id.toString(),
             name: row.name,
             icon: row.icon,
-            itemCount: row.itemCount || 0
+            itemCount: row.itemCount || 0,
+            isActive: row.is_active === undefined || row.is_active === null ? true : Boolean(row.is_active)
         }));
         res.json(formatted);
     } catch (err) {
@@ -4797,7 +4815,7 @@ app.post('/api/categories', requireAdmin, async (req, res) => {
             'INSERT INTO categories (name, icon, sort_order) VALUES (?, ?, ?)',
             [name, icon, nextOrder]
         );
-        res.status(201).json({ id: result.insertId.toString(), name, icon, itemCount: 0 });
+        res.status(201).json({ id: result.insertId.toString(), name, icon, itemCount: 0, isActive: true });
     } catch (err) {
         res.status(500).json({ error: 'Failed to create' });
     }
@@ -4805,10 +4823,11 @@ app.post('/api/categories', requireAdmin, async (req, res) => {
 
 app.put('/api/categories/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const { name, icon } = req.body;
+    const { name, icon, isActive } = req.body;
     try {
-        if (name) await db.query('UPDATE categories SET name = ? WHERE id = ?', [name, id]);
-        if (icon) await db.query('UPDATE categories SET icon = ? WHERE id = ?', [icon, id]);
+        if (name !== undefined) await db.query('UPDATE categories SET name = ? WHERE id = ?', [name, id]);
+        if (icon !== undefined) await db.query('UPDATE categories SET icon = ? WHERE id = ?', [icon, id]);
+        if (isActive !== undefined) await db.query('UPDATE categories SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, id]);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Failed to update' });
@@ -4855,7 +4874,7 @@ app.post('/api/categories/reorder', requireAdmin, async (req, res) => {
 app.get('/api/menu', async (req, res) => {
     try {
         const query = `
-            SELECT m.*, c.name as category_name 
+            SELECT m.*, c.name as category_name, c.is_active as category_is_active 
             FROM menu_items m
             LEFT JOIN categories c ON m.category_id = c.id
             ORDER BY COALESCE(c.sort_order, 2147483647) ASC, m.sort_order ASC, m.id ASC
@@ -4872,7 +4891,8 @@ app.get('/api/menu', async (req, res) => {
             category_id: row.category_id ? row.category_id.toString() : null,
             sortOrder: Number(row.sort_order || 0),
             stock: row.stock,
-            isActive: Boolean(row.is_active)
+            isActive: Boolean(row.is_active) && (row.category_is_active === null || Boolean(row.category_is_active)),
+            itemIsActive: Boolean(row.is_active)
         }));
 
         res.json(formatted);
@@ -5944,9 +5964,10 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         const menuItemIds = Array.from(requestedQuantityById.keys());
         const [menuRows] = await connection.query(
             `
-                SELECT id, name, stock, is_active, price
-                FROM menu_items
-                WHERE id IN (?)
+                SELECT m.id, m.name, m.stock, m.is_active, m.price, c.is_active as category_is_active
+                FROM menu_items m
+                LEFT JOIN categories c ON c.id = m.category_id
+                WHERE m.id IN (?)
                 FOR UPDATE
             `,
             [menuItemIds]
@@ -5963,7 +5984,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 throw error;
             }
             const availableStock = Number(row.stock || 0);
-            const isActive = Boolean(row.is_active);
+            const isActive = Boolean(row.is_active) && (row.category_is_active === null || Boolean(row.category_is_active));
             if (!isActive || availableStock <= 0) {
                 const error = new Error(`${row.name} is out of stock`);
                 error.status = 400;
@@ -6635,16 +6656,18 @@ app.post('/api/orders/:id/reorder', requireAuth, async (req, res) => {
 
             const [menuRows] = await connection.query(
                 `
-                    SELECT stock, is_active
-                    FROM menu_items
-                    WHERE id = ?
+                    SELECT m.stock, m.is_active, c.is_active as category_is_active
+                    FROM menu_items m
+                    LEFT JOIN categories c ON c.id = m.category_id
+                    WHERE m.id = ?
                     LIMIT 1
                     FOR UPDATE
                 `,
                 [menuItemId]
             );
             const menuRow = menuRows[0];
-            if (!menuRow || !menuRow.is_active || Number(menuRow.stock || 0) <= 0) {
+            const isItemActive = menuRow && menuRow.is_active && (menuRow.category_is_active === null || Boolean(menuRow.category_is_active));
+            if (!menuRow || !isItemActive || Number(menuRow.stock || 0) <= 0) {
                 skippedCount += 1;
                 continue;
             }

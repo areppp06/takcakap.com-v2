@@ -221,6 +221,28 @@ const AdminCategories: React.FC = () => {
                               )}
                           </div>
 
+                           {/* Toggle Switch */}
+                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                               <button
+                                 onClick={() => {
+                                   updateCategory(cat.id, { isActive: cat.isActive === false });
+                                 }}
+                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                                   cat.isActive !== false ? 'bg-primary animate-none' : 'bg-gray-200 dark:bg-zinc-700'
+                                 }`}
+                                 title={cat.isActive !== false ? 'Active' : 'Inactive'}
+                               >
+                                 <span
+                                   className={`inline-block size-4 transform rounded-full bg-white transition-transform ${
+                                     cat.isActive !== false ? 'translate-x-6' : 'translate-x-1'
+                                   }`}
+                                 />
+                               </button>
+                               <span className="text-xs font-bold w-12 text-slate-400">
+                                   {cat.isActive !== false ? 'Active' : 'Inactive'}
+                                </span>
+                           </div>
+
                           {/* Actions */}
                           <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               <button 

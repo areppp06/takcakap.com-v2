@@ -78,13 +78,15 @@ const Home: React.FC = () => {
 
   const storefrontItems = useMemo(() => items.filter((item) => item.isActive), [items]);
 
+  const activeCategories = useMemo(() => categories.filter(cat => cat.isActive !== false), [categories]);
+
   // Filter Logic
   const filteredItems = selectedCategory === 'All' 
     ? storefrontItems
     : storefrontItems.filter(item => item.category === selectedCategory);
 
   const groupedAllItems = useMemo(() => {
-    const groups = categories
+    const groups = activeCategories
       .map((category) => ({
         id: category.id,
         name: category.name,
@@ -238,7 +240,7 @@ const Home: React.FC = () => {
                   ))}
                </>
             ) : (
-              categories.map((cat) => (
+              activeCategories.map((cat) => (
                 <button 
                   key={cat.id} 
                   onClick={() => setSelectedCategory(cat.name)}

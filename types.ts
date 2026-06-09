@@ -9,6 +9,7 @@ export interface MenuItem {
   sortOrder?: number;
   stock: number;
   isActive: boolean;
+  itemIsActive?: boolean;
 }
 
 export interface Category {
@@ -16,6 +17,7 @@ export interface Category {
   name: string;
   icon: string;
   itemCount: number;
+  isActive?: boolean;
 }
 
 export type OrderStatus =

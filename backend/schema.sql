@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
     icon VARCHAR(50),
-    sort_order INT DEFAULT 0
+    sort_order INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE
 );
 
 -- Menu Items Table

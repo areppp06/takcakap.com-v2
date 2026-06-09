@@ -226,7 +226,7 @@ const AdminMenu: React.FC = () => {
               image: item.image,
               category_id: resolvedCategoryId,
               stock: item.stock,
-              isActive: item.isActive
+              isActive: item.itemIsActive !== undefined ? item.itemIsActive : item.isActive
           });
       } else {
           setEditingItem(null);
@@ -460,13 +460,15 @@ const AdminMenu: React.FC = () => {
                                  }`}>
                                    {item.stock > 0 ? `${item.stock} left` : 'Out of stock'}
                                  </span>
-                                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                   item.isActive
-                                     ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-                                     : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'
-                                 }`}>
-                                   {item.isActive ? 'Active' : 'Inactive'}
-                                 </span>
+                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                    item.itemIsActive === false
+                                      ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+                                      : item.isActive
+                                        ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                                        : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+                                  }`}>
+                                    {item.itemIsActive === false ? 'Inactive' : item.isActive ? 'Active' : 'Category Inactive'}
+                                  </span>
                                </div>
                              </div>
                            </div>
@@ -580,12 +582,24 @@ const AdminMenu: React.FC = () => {
                                         {item.stock > 0 ? `${item.stock} left` : 'Out of stock'}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4">
-                                    <div className={`flex items-center gap-1.5 text-xs font-bold ${item.isActive ? 'text-green-500' : 'text-red-500'}`}>
-                                        <span className={`size-2 rounded-full ${item.isActive ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                        {item.isActive ? 'Active' : 'Inactive'}
-                                    </div>
-                                </td>
+                                 <td className="px-6 py-4">
+                                     {item.itemIsActive === false ? (
+                                         <div className="flex items-center gap-1.5 text-xs font-bold text-red-500">
+                                             <span className="size-2 rounded-full bg-red-500"></span>
+                                             Inactive
+                                         </div>
+                                     ) : item.isActive ? (
+                                         <div className="flex items-center gap-1.5 text-xs font-bold text-green-500">
+                                             <span className="size-2 rounded-full bg-green-500"></span>
+                                             Active
+                                         </div>
+                                     ) : (
+                                         <div className="flex items-center gap-1.5 text-xs font-bold text-amber-500" title="The category for this item is disabled.">
+                                             <span className="size-2 rounded-full bg-amber-500"></span>
+                                             Category Disabled
+                                         </div>
+                                     )}
+                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex items-center justify-end gap-2">
                                         <button
@@ -657,7 +671,9 @@ const AdminMenu: React.FC = () => {
                              onChange={e => setFormData({...formData, category_id: e.target.value})}
                            >
                                {categories.map(c => (
-                                   <option key={c.id} value={c.id}>{c.name}</option>
+                                   <option key={c.id} value={c.id}>
+                                       {c.name} {c.isActive === false ? '(Disabled)' : ''}
+                                   </option>
                                ))}
                            </select>
                        </div>
