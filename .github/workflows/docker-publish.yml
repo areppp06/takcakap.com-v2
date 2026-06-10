@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/loyalty-system
 
 env:
   REGISTRY: ghcr.io
