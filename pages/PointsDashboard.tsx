@@ -19,7 +19,7 @@ export default function PointsDashboard() {
     const [confirmRedeem, setConfirmRedeem] = useState<number | null>(null);
     const [successCode, setSuccessCode] = useState<string | null>(null);
     const [vouchersPage, setVouchersPage] = useState(1);
-    const [historyPage, setHistoryPage] = useState(1);
+    const [historyVisibleCount, setHistoryVisibleCount] = useState(10);
     
     const VOUCHERS_PER_PAGE = 4;
     const HISTORY_PER_PAGE = 10;
@@ -92,8 +92,8 @@ export default function PointsDashboard() {
     const currentVouchers = displayVouchers.slice((vouchersPage - 1) * VOUCHERS_PER_PAGE, vouchersPage * VOUCHERS_PER_PAGE);
 
     const transactions = pointsData?.transactions || [];
-    const totalHistoryPages = Math.max(1, Math.ceil(transactions.length / HISTORY_PER_PAGE));
-    const currentTransactions = transactions.slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE);
+    const hasMoreHistory = historyVisibleCount < transactions.length;
+    const currentTransactions = transactions.slice(0, historyVisibleCount);
 
     return (
         <UserDashboardLayout>
@@ -228,22 +228,14 @@ export default function PointsDashboard() {
                                         );
                                     })}
                                 </div>
-                                {totalHistoryPages > 1 && (
-                                    <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200 mt-4">
+                                {hasMoreHistory && (
+                                    <div className="relative mt-2">
+                                        <div className="absolute inset-x-0 bottom-full h-12 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
                                         <button 
-                                            onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                                            disabled={historyPage === 1}
-                                            className="px-3 py-1 bg-white border border-gray-300 rounded text-sm disabled:opacity-50"
+                                            onClick={() => setHistoryVisibleCount(v => v + HISTORY_PER_PAGE)}
+                                            className="w-full py-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-sm transition-colors border border-gray-200"
                                         >
-                                            Prev
-                                        </button>
-                                        <span className="text-xs font-semibold">Pg {historyPage} / {totalHistoryPages}</span>
-                                        <button 
-                                            onClick={() => setHistoryPage(p => Math.min(totalHistoryPages, p + 1))}
-                                            disabled={historyPage === totalHistoryPages}
-                                            className="px-3 py-1 bg-white border border-gray-300 rounded text-sm disabled:opacity-50"
-                                        >
-                                            Next
+                                            Load More
                                         </button>
                                     </div>
                                 )}
