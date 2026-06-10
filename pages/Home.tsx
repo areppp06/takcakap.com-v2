@@ -156,26 +156,27 @@ const Home: React.FC = () => {
           </div>
         )}
       </div>
-      <div className="p-5">
-        <div className="flex justify-between items-start mb-2">
-          <h3 className={`text-background-dark dark:text-white font-bold text-lg leading-tight ${!canPurchase ? 'text-gray-400 dark:text-gray-500' : ''}`}>{item.name}</h3>
-          <span className={`text-primary font-bold text-lg ${!canPurchase ? 'opacity-50' : ''}`}>{formatCurrency(item.price)}</span>
+      <div className="p-3 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:justify-between items-start mb-1 sm:mb-2 gap-0 sm:gap-2">
+          <h3 className={`text-background-dark dark:text-white font-bold text-[14px] sm:text-lg leading-tight ${!canPurchase ? 'text-gray-400 dark:text-gray-500' : ''}`}>{item.name}</h3>
+          <span className={`text-primary font-bold text-[14px] sm:text-lg ${!canPurchase ? 'opacity-50' : ''}`}>{formatCurrency(item.price)}</span>
         </div>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-3 line-clamp-2 h-10">{item.description}</p>
-        <p className={`text-xs font-semibold mb-5 ${canPurchase ? 'text-emerald-600' : 'text-red-500'}`}>
+        <p className="text-zinc-500 dark:text-zinc-400 text-[11px] sm:text-sm mb-2 sm:mb-3 line-clamp-2 h-7 sm:h-10 leading-snug">{item.description}</p>
+        <p className={`text-[10px] sm:text-xs font-semibold mb-3 sm:mb-5 ${canPurchase ? 'text-emerald-600' : 'text-red-500'}`}>
           {canPurchase ? `${availableStock} left` : !isShopOrderable ? 'Temporarily unavailable' : 'Out of stock'}
         </p>
         <button
           onClick={() => canPurchase && handleAddToCart(item)}
           disabled={!canPurchase}
-          className={`w-full font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all transform ${
+          className={`w-full font-bold py-2 sm:py-3 text-[13px] sm:text-base rounded-lg flex items-center justify-center gap-1 sm:gap-2 transition-all transform ${
             canPurchase
               ? 'bg-primary hover:bg-[#cc10c3] text-background-dark active:scale-95'
               : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-200 dark:border-zinc-700'
           }`}
         >
-          <span className="material-symbols-outlined font-bold">{canPurchase ? 'add' : 'block'}</span>
-          {canPurchase ? 'Add to Cart' : 'Sold Out'}
+          <span className="material-symbols-outlined font-bold text-[18px] sm:text-[24px]">{canPurchase ? 'add' : 'block'}</span>
+          <span className="hidden sm:inline">{canPurchase ? 'Add to Cart' : 'Sold Out'}</span>
+          <span className="sm:hidden">{canPurchase ? 'Add' : 'Sold'}</span>
         </button>
       </div>
     </div>
@@ -260,7 +261,7 @@ const Home: React.FC = () => {
 
         {/* Product Grid */}
         {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 lg:gap-8">
                {[1,2,3,4,5,6].map(i => (
                    <div key={i} className="h-80 bg-gray-200 dark:bg-zinc-800 rounded-xl animate-pulse"></div>
                ))}
@@ -277,7 +278,7 @@ const Home: React.FC = () => {
                       <h2 className="text-2xl font-extrabold text-background-dark dark:text-white">{group.name}</h2>
                       <span className="text-sm text-zinc-500">({group.items.length})</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 lg:gap-8">
                       {group.items.map((item) => renderMenuCard(item))}
                     </div>
                   </section>
@@ -285,7 +286,7 @@ const Home: React.FC = () => {
               )}
             </div>
         ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 lg:gap-8">
               {filteredItems.map((item) => renderMenuCard(item))}
             </div>
         )}
