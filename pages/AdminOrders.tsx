@@ -572,7 +572,7 @@ const AdminOrders: React.FC = () => {
                     <>
                         <div className={`flex flex-col ${compact ? 'w-full' : 'items-end'} gap-1`}>
                             {order.cancelWindowMode === 'OPEN_UNTIL_ASSIGNED' && (
-                                <span className="text-[10px] font-bold uppercase text-amber-700">Cancelable until rider assigned</span>
+                                <span className="text-[10px] font-bold uppercase text-amber-700">5m cancel window starts when rider is OTW</span>
                             )}
                             {order.cancelWindowMode === 'LIMITED' && cancelRemainingSeconds !== null && (
                                 <span className="text-[10px] font-bold uppercase text-amber-700">
