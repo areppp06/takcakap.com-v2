@@ -189,76 +189,98 @@ const AdminCategories: React.FC = () => {
                         onDragEnter={(e) => handleDragEnter(e, index)}
                         onDragEnd={handleDragEnd}
                         onDragOver={(e) => e.preventDefault()}
-                        className="group bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm flex items-center gap-4 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-all"
+                        className="group bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-all"
                       >
-                          {/* Drag Handle */}
-                          <div className="text-gray-300 hover:text-primary cursor-grab">
-                              <span className="material-symbols-outlined">drag_indicator</span>
+                          <div className="flex items-center gap-3 sm:gap-4 flex-1 w-full">
+                              {/* Drag Handle (Desktop) */}
+                              <div className="hidden sm:block text-gray-300 hover:text-primary cursor-grab shrink-0">
+                                  <span className="material-symbols-outlined">drag_indicator</span>
+                              </div>
+
+                              {/* Mobile Up/Down controls */}
+                              <div className="flex sm:hidden flex-col gap-1 text-gray-400 shrink-0">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); if(index > 0) reorderCategories(index, index - 1); }} 
+                                    disabled={index === 0}
+                                    className="hover:text-primary disabled:opacity-30 disabled:hover:text-gray-400"
+                                  >
+                                      <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_up</span>
+                                  </button>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); if(index < categories.length - 1) reorderCategories(index, index + 1); }} 
+                                    disabled={index === categories.length - 1}
+                                    className="hover:text-primary disabled:opacity-30 disabled:hover:text-gray-400"
+                                  >
+                                      <span className="material-symbols-outlined text-[20px] leading-none">keyboard_arrow_down</span>
+                                  </button>
+                              </div>
+
+                              {/* Icon */}
+                              <div className="size-10 rounded-lg bg-gray-50 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                                  <span className="material-symbols-outlined text-primary">{cat.icon}</span>
+                              </div>
+
+                              {/* Content */}
+                              <div className="flex-1 min-w-0">
+                                  {editingId === cat.id ? (
+                                      <input 
+                                        autoFocus
+                                        type="text"
+                                        className="w-full bg-transparent border-b-2 border-primary focus:outline-none px-0 py-1 font-bold"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(cat.id)}
+                                        onBlur={() => handleSaveEdit(cat.id)}
+                                      />
+                                  ) : (
+                                      <div className="flex flex-col">
+                                          <span className="font-bold text-lg truncate">{cat.name}</span>
+                                          <span className="text-xs text-gray-400">{cat.itemCount} items linked</span>
+                                      </div>
+                                  )}
+                              </div>
                           </div>
 
-                          {/* Icon */}
-                          <div className="size-10 rounded-lg bg-gray-50 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                              <span className="material-symbols-outlined text-primary">{cat.icon}</span>
-                          </div>
+                          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-slate-700">
+                               {/* Toggle Switch */}
+                               <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                   <button
+                                     onClick={() => {
+                                       updateCategory(cat.id, { isActive: cat.isActive === false });
+                                     }}
+                                     className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                                       cat.isActive !== false ? 'bg-primary animate-none' : 'bg-gray-200 dark:bg-zinc-700'
+                                     }`}
+                                     title={cat.isActive !== false ? 'Active' : 'Inactive'}
+                                   >
+                                     <span
+                                       className={`inline-block size-4 transform rounded-full bg-white transition-transform ${
+                                         cat.isActive !== false ? 'translate-x-6' : 'translate-x-1'
+                                       }`}
+                                     />
+                                   </button>
+                                   <span className="text-xs font-bold w-12 text-slate-400">
+                                       {cat.isActive !== false ? 'Active' : 'Inactive'}
+                                    </span>
+                               </div>
 
-                          {/* Content */}
-                          <div className="flex-1">
-                              {editingId === cat.id ? (
-                                  <input 
-                                    autoFocus
-                                    type="text"
-                                    className="w-full bg-transparent border-b-2 border-primary focus:outline-none px-0 py-1 font-bold"
-                                    value={editName}
-                                    onChange={(e) => setEditName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(cat.id)}
-                                    onBlur={() => handleSaveEdit(cat.id)}
-                                  />
-                              ) : (
-                                  <div className="flex flex-col">
-                                      <span className="font-bold text-lg">{cat.name}</span>
-                                      <span className="text-xs text-gray-400">{cat.itemCount} items linked</span>
-                                  </div>
-                              )}
-                          </div>
-
-                           {/* Toggle Switch */}
-                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                               <button
-                                 onClick={() => {
-                                   updateCategory(cat.id, { isActive: cat.isActive === false });
-                                 }}
-                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                                   cat.isActive !== false ? 'bg-primary animate-none' : 'bg-gray-200 dark:bg-zinc-700'
-                                 }`}
-                                 title={cat.isActive !== false ? 'Active' : 'Inactive'}
-                               >
-                                 <span
-                                   className={`inline-block size-4 transform rounded-full bg-white transition-transform ${
-                                     cat.isActive !== false ? 'translate-x-6' : 'translate-x-1'
-                                   }`}
-                                 />
-                               </button>
-                               <span className="text-xs font-bold w-12 text-slate-400">
-                                   {cat.isActive !== false ? 'Active' : 'Inactive'}
-                                </span>
-                           </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                              <button 
-                                onClick={() => handleStartEdit(cat)}
-                                className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                                title="Rename"
-                              >
-                                  <span className="material-symbols-outlined text-xl">edit</span>
-                              </button>
-                              <button 
-                                onClick={() => handleDelete(cat.id)}
-                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                title="Delete"
-                              >
-                                  <span className="material-symbols-outlined text-xl">delete</span>
-                              </button>
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => handleStartEdit(cat)}
+                                    className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                                    title="Rename"
+                                  >
+                                      <span className="material-symbols-outlined text-xl">edit</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDelete(cat.id)}
+                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    title="Delete"
+                                  >
+                                      <span className="material-symbols-outlined text-xl">delete</span>
+                                  </button>
+                              </div>
                           </div>
                       </div>
                   ))}

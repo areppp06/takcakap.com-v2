@@ -314,7 +314,12 @@ const AdminOrders: React.FC = () => {
         return 'bg-gray-100 text-gray-700 border-gray-200';
     };
 
-    const filteredOrders = useMemo(() => orders, [orders]);
+    const filteredOrders = useMemo(() => {
+        if (filter === 'Scheduled') {
+            return orders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
+        }
+        return orders;
+    }, [orders, filter]);
     const statusFilters = [
         'All',
         'Scheduled',
@@ -770,7 +775,14 @@ const AdminOrders: React.FC = () => {
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-extrabold leading-none">#{order.shortCode || order.id}</p>
-                                                    <p className="text-xs text-gray-400 mt-1">{getOrderTime(order.date)}</p>
+                                                    <p className="text-[10px] font-black uppercase text-gray-600 dark:text-gray-300 mt-1.5">{order.customerName}</p>
+                                                    {!!order.customerPhone && (
+                                                        <a href={`tel:${order.customerPhone}`} className="text-[10px] text-blue-500 hover:text-blue-600 font-bold flex items-center gap-1 mt-1 w-max inline-flex bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">
+                                                            <span className="material-symbols-outlined text-[12px]">call</span>
+                                                            {order.customerPhone}
+                                                        </a>
+                                                    )}
+                                                    <p className="text-xs text-gray-400 mt-1.5">{getOrderTime(order.date)}</p>
                                                     {scheduledLabel && (
                                                         <p className="text-[11px] font-semibold text-fuchsia-700 mt-1">Scheduled: {scheduledLabel}</p>
                                                     )}
@@ -806,9 +818,11 @@ const AdminOrders: React.FC = () => {
                                                 <p className="text-xs font-bold text-primary">{formatCurrency(order.total)}</p>
                                             </div>
 
-                                            <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">{order.itemsSummary}</p>
-                                            <p className="text-xs text-gray-500 mt-1">{order.customerName}</p>
-                                            {!!order.customerPhone && <p className="text-xs text-gray-500">{order.customerPhone}</p>}
+                                            <div className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                                {order.itemsSummary?.split(', ').map((item, i) => (
+                                                    <div key={i} className="py-1 border-b border-gray-100 dark:border-slate-700/50 last:border-0 leading-tight">{item}</div>
+                                                ))}
+                                            </div>
 
                                             <div className="mt-3">
                                                 {renderOrderActions(order, true)}
@@ -841,7 +855,14 @@ const AdminOrders: React.FC = () => {
                                                 <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                                     <td className="px-6 py-4 align-top">
                                                         <p className="font-bold text-sm">{order.shortCode || order.id}</p>
-                                                        <p className="text-xs text-gray-400 mt-1">{getOrderTime(order.date)}</p>
+                                                        <p className="text-[10px] font-black uppercase text-gray-600 dark:text-gray-300 mt-1.5">{order.customerName}</p>
+                                                        {!!order.customerPhone && (
+                                                            <a href={`tel:${order.customerPhone}`} className="text-[10px] text-blue-500 hover:text-blue-600 font-bold flex items-center gap-1 mt-1 w-max inline-flex bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">
+                                                                <span className="material-symbols-outlined text-[12px]">call</span>
+                                                                {order.customerPhone}
+                                                            </a>
+                                                        )}
+                                                        <p className="text-xs text-gray-400 mt-1.5">{getOrderTime(order.date)}</p>
                                                         {scheduledLabel && <p className="text-[11px] font-semibold text-fuchsia-700 mt-1">Scheduled: {scheduledLabel}</p>}
                                                     </td>
                                                     <td className="px-6 py-4 align-top">
@@ -852,12 +873,14 @@ const AdminOrders: React.FC = () => {
                                                                 </span>
                                                                 {order.orderType}
                                                             </span>
-                                                            <p className="text-xs text-gray-400 font-medium">{order.customerName}</p>
-                                                            {!!order.customerPhone && <p className="text-xs text-gray-400 font-medium">{order.customerPhone}</p>}
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 align-top">
-                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{order.itemsSummary}</p>
+                                                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                            {order.itemsSummary?.split(', ').map((item, i) => (
+                                                                <div key={i} className="py-1 border-b border-gray-100 dark:border-slate-700/50 last:border-0 leading-tight">{item}</div>
+                                                            ))}
+                                                        </div>
                                                         <p className="text-xs font-bold text-primary mt-1">{formatCurrency(order.total)}</p>
                                                     </td>
                                                     <td className="px-6 py-4 align-top">
