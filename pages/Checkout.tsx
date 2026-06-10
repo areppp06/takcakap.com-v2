@@ -477,7 +477,7 @@ const Checkout: React.FC = () => {
     setIsApplyingVoucher(true);
     setVoucherError('');
     try {
-        const token = localStorage.getItem('takcakap_token');
+        const token = localStorage.getItem('takcakap_auth_token');
         const response = await fetch('/api/user/vouchers/validate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
