@@ -5,9 +5,7 @@ import { api } from '../services/api';
 import { Order, ReorderPreview } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../utils/currency';
-import AppHeader, { HeaderAvatarLink, HeaderCartLink } from '../components/AppHeader';
-import UserMobileTabBar from '../components/UserMobileTabBar';
-import { useCart } from '../contexts/CartContext';
+import UserDashboardLayout from '../components/UserDashboardLayout';
 
 const USER_ORDERS_PAGE_SIZE = 20;
 
@@ -38,7 +36,6 @@ const OrderHistory: React.FC = () => {
   const [serviceFee, setServiceFee] = useState(1.8);
   const [notice, setNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const { user, logout, isAuthenticated } = useAuth();
-  const { cartCount } = useCart();
   const activeUser = user || currentUser;
 
   const getStatusBadgeClass = (status: string) => {
@@ -193,51 +190,8 @@ const OrderHistory: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#0d1c0d] dark:text-white">
-      <AppHeader
-        containerClassName="px-4 md:px-10"
-        maxWidthClassName="max-w-[1440px]"
-        rightContent={
-          <>
-            <HeaderCartLink cartCount={cartCount} />
-            <HeaderAvatarLink isAuthenticated={isAuthenticated} avatarUrl={activeUser.avatar} />
-          </>
-        }
-      />
-
-      <div className="flex flex-1 max-w-[1440px] mx-auto w-full px-4 md:px-10 pt-28 sm:pt-32 pb-24 lg:pb-8 gap-6 md:gap-8">
-        {/* Sidebar */}
-        <aside className="hidden lg:flex flex-col w-64 shrink-0 gap-6">
-           <div className="bg-white dark:bg-white/5 rounded-xl p-6 shadow-sm border border-[#e7f4e7] dark:border-white/10 sticky top-24">
-             <div className="flex flex-col gap-4">
-               <Link to="/dashboard" className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#e7f4e7] dark:hover:bg-white/5 transition-colors">
-                 <span className="material-symbols-outlined">grid_view</span>
-                 <span className="text-sm font-medium">Dashboard</span>
-               </Link>
-               <Link to="/orders" className="flex items-center gap-3 p-2 rounded-lg bg-primary text-[#0d1c0d] font-bold">
-                 <span className="material-symbols-outlined">receipt_long</span>
-                 <span className="text-sm">Order History</span>
-               </Link>
-               <Link to="/addresses" className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#e7f4e7] dark:hover:bg-white/5 transition-colors">
-                 <span className="material-symbols-outlined">location_on</span>
-                 <span className="text-sm font-medium">Saved Addresses</span>
-               </Link>
-               <Link to="/account" className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#e7f4e7] dark:hover:bg-white/5 transition-colors">
-                 <span className="material-symbols-outlined">person</span>
-                 <span className="text-sm font-medium">Manage Account</span>
-               </Link>
-             </div>
-             <div className="mt-8 pt-8 border-t border-[#e7f4e7] dark:border-white/10">
-                <button onClick={logout} className="flex items-center gap-3 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg w-full transition-colors">
-                   <span className="material-symbols-outlined">logout</span>
-                   <span className="text-sm font-medium">Log Out</span>
-                </button>
-             </div>
-           </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col gap-5 sm:gap-6 min-w-0">
+    <>
+      <UserDashboardLayout>
             {notice && (
               <div
                 className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
@@ -395,8 +349,7 @@ const OrderHistory: React.FC = () => {
                   </div>
                 )}
             </div>
-        </main>
-      </div>
+      </UserDashboardLayout>
 
       {reorderPreview && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center px-4">
@@ -510,8 +463,7 @@ const OrderHistory: React.FC = () => {
           </div>
         </div>
       )}
-      <UserMobileTabBar />
-    </div>
+    </>
   );
 };
 
