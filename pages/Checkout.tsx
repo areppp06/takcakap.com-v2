@@ -206,6 +206,9 @@ const Checkout: React.FC = () => {
   const [voucherError, setVoucherError] = useState('');
   const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
 
+  // Points State
+  const [userPoints, setUserPoints] = useState(0);
+
   // Cart Validation State
   const [menuMap, setMenuMap] = useState<Record<string, MenuItem>>({});
   const [isValidating, setIsValidating] = useState(true);
@@ -225,6 +228,27 @@ const Checkout: React.FC = () => {
     };
     validateCart();
   }, []);
+
+  useEffect(() => {
+    const loadPoints = async () => {
+      const token = localStorage.getItem('takcakap_auth_token');
+      if (!token) return;
+      try {
+        const res = await fetch('/api/user/points', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUserPoints(data.balance || 0);
+        }
+      } catch (err) {
+        console.error('Failed to load points', err);
+      }
+    };
+    if (isAuthenticated) {
+      loadPoints();
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const loadDeliveryOptions = async () => {
@@ -1335,6 +1359,18 @@ const Checkout: React.FC = () => {
                          <span>Subtotal</span>
                          <span className="font-bold text-[#0d1c0d] dark:text-white">{formatCurrency(cartTotal)}</span>
                       </div>
+                      {isAuthenticated && (
+                          <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                             <span>Current Points</span>
+                             <span className="font-bold text-[#0d1c0d] dark:text-white">{userPoints} pts</span>
+                          </div>
+                      )}
+                      {isAuthenticated && (
+                          <div className="flex justify-between text-sm font-bold text-[#b49820]">
+                             <span>Points to Earn</span>
+                             <span>+ {Math.floor(total) * 10} pts</span>
+                          </div>
+                      )}
                       <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
                          <span>Service Fee</span>
                          <span className="font-bold text-[#0d1c0d] dark:text-white">{formatCurrency(serviceFee)}</span>

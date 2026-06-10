@@ -162,9 +162,13 @@ const Home: React.FC = () => {
           <span className={`text-primary font-bold text-[14px] sm:text-lg ${!canPurchase ? 'opacity-50' : ''}`}>{formatCurrency(item.price)}</span>
         </div>
         <p className="text-zinc-500 dark:text-zinc-400 text-[11px] sm:text-sm mb-2 sm:mb-3 line-clamp-2 h-7 sm:h-10 leading-snug">{item.description}</p>
-        <p className={`text-[10px] sm:text-xs font-semibold mb-3 sm:mb-5 ${canPurchase ? 'text-emerald-600' : 'text-red-500'}`}>
+        <p className={`text-[10px] sm:text-xs font-semibold mb-1 ${canPurchase ? 'text-emerald-600' : 'text-red-500'}`}>
           {canPurchase ? `${availableStock} left` : !isShopOrderable ? 'Temporarily unavailable' : 'Out of stock'}
         </p>
+        <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-bold mb-3 sm:mb-5 ${canPurchase ? 'text-[#b49820] dark:text-yellow-400' : 'text-gray-400'}`}>
+            <span className="material-symbols-outlined text-[14px]">stars</span>
+            <span>Earn {Math.floor(Number(item.price)) * 10} pts</span>
+        </div>
         <button
           onClick={() => canPurchase && handleAddToCart(item)}
           disabled={!canPurchase}
