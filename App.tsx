@@ -8,6 +8,7 @@ import Home from './pages/Home';
 import AboutUs from './pages/AboutUs';
 import ContactUs from './pages/ContactUs';
 import UserDashboard from './pages/UserDashboard';
+import PointsDashboard from './pages/PointsDashboard';
 import OrderHistory from './pages/OrderHistory';
 import SavedAddresses from './pages/SavedAddresses';
 import ManageAccount from './pages/ManageAccount';
@@ -27,6 +28,8 @@ const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
 const RefundReplacementPolicy = React.lazy(() => import('./pages/RefundReplacementPolicy'));
 const DeliveryPolicy = React.lazy(() => import('./pages/DeliveryPolicy'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const AdminPoints = React.lazy(() => import('./pages/AdminPoints'));
+const AdminVouchers = React.lazy(() => import('./pages/AdminVouchers'));
 const AdminCategories = React.lazy(() => import('./pages/AdminCategories'));
 const AdminMenu = React.lazy(() => import('./pages/AdminMenu'));
 const AdminOrders = React.lazy(() => import('./pages/AdminOrders'));
@@ -140,6 +143,8 @@ const App: React.FC = () => {
               <Route path="/login" element={<AdminLogin />} />
               <Route path="/admin/login" element={<Navigate to="/login" replace />} />
               <Route path="/manage-shop" element={<RequireAdminAuth><SuspensePage><AdminManageShop /></SuspensePage></RequireAdminAuth>} />
+              <Route path="/admin/points" element={<RequireAdminAuth><SuspensePage><AdminPoints /></SuspensePage></RequireAdminAuth>} />
+              <Route path="/admin/vouchers" element={<RequireAdminAuth><SuspensePage><AdminVouchers /></SuspensePage></RequireAdminAuth>} />
               <Route path="/customers" element={<RequireAdminAuth><SuspensePage><AdminCustomers /></SuspensePage></RequireAdminAuth>} />
               <Route path="/orders" element={<RequireAdminAuth><SuspensePage><AdminOrders /></SuspensePage></RequireAdminAuth>} />
               <Route path="/categories" element={<RequireAdminAuth><SuspensePage><AdminCategories /></SuspensePage></RequireAdminAuth>} />
@@ -191,6 +196,7 @@ const App: React.FC = () => {
                 <Route path="/admin/*" element={<RedirectToAdminSubdomain />} />
                 
                 <Route path="/dashboard" element={<RequireUserAuth><UserDashboard /></RequireUserAuth>} />
+                <Route path="/rewards" element={<RequireUserAuth><PointsDashboard /></RequireUserAuth>} />
                 <Route path="/orders" element={<RequireUserAuth><OrderHistory /></RequireUserAuth>} />
                 <Route path="/addresses" element={<RequireUserAuth><SavedAddresses /></RequireUserAuth>} />
                 <Route path="/account" element={<RequireUserAuth><ManageAccount /></RequireUserAuth>} />

@@ -13,7 +13,9 @@ const NAV_ITEMS = [
   { to: '/admin/delivery-options', label: 'Delivery', icon: 'local_shipping' },
   { to: '/admin/manage-shop', label: 'Manage Shop', icon: 'storefront' },
   { to: '/admin/customers', label: 'Customers', icon: 'groups' },
-  { to: '/admin/payment-options', label: 'Payment', icon: 'qr_code_2' }
+  { to: '/admin/payment-options', label: 'Payment', icon: 'qr_code_2' },
+  { to: '/admin/points', label: 'Points', icon: 'stars' },
+  { to: '/admin/vouchers', label: 'Vouchers', icon: 'local_activity' }
 ];
 
 const AdminSidebarNav: React.FC<AdminSidebarNavProps> = ({ currentPath }) => {

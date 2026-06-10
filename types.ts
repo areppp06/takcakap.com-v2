@@ -287,6 +287,7 @@ export interface CreateOrderPayload {
   quotationStops?: DeliveryQuoteStop[];
   recipient?: DeliveryRecipient;
   paymentMethod?: string;
+  voucherCode?: string;
   curlecPayment?: CurlecPaymentConfirmation;
   curlecCheckoutSessionId?: string;
   deliveryTiming?: 'NOW' | 'SCHEDULED';

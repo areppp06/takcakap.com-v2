@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 const tabs = [
   { to: '/dashboard', label: 'Dashboard', icon: 'grid_view' },
+  { to: '/rewards', label: 'Rewards', icon: 'stars' },
   { to: '/orders', label: 'Orders', icon: 'receipt_long' },
   { to: '/addresses', label: 'Addresses', icon: 'location_on' },
   { to: '/account', label: 'Account', icon: 'person' }
@@ -17,7 +18,7 @@ const UserMobileTabBar: React.FC = () => {
   return (
     <nav className="lg:hidden fixed inset-x-0 bottom-0 z-[80] px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none">
       <div className="pointer-events-auto mx-auto max-w-md rounded-2xl border border-primary/20 bg-white/95 dark:bg-background-dark/90 backdrop-blur-md shadow-xl shadow-black/5">
-        <div className="grid grid-cols-4 gap-1 p-1.5">
+        <div className="grid grid-cols-5 gap-1 p-1.5">
           {tabs.map((tab) => {
             const active = isActive(tab.to);
             return (

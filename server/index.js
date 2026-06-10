@@ -21,6 +21,7 @@ const {
 const db = require('./db');
 const lalamoveService = require('./lalamoveService');
 const emailService = require('./emailService');
+const loyaltyService = require('./loyaltyService');
 const { assertNoPendingMigrations } = require('./migrationRunner');
 const { sendPushToUser, sendFcmToAdmins } = require('./pushService');
 const multer = require('multer');
@@ -3043,6 +3044,7 @@ app.use(
     })
 );
 app.use(express.urlencoded({ extended: false }));
+app.use('/api', require('./loyaltyRoutes')(requireAuth, requireAdmin));
 
 const API_ALIAS_PREFIXES = [
     '/status',
@@ -5732,7 +5734,8 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         curlecPayment,
         curlecCheckoutSessionId,
         deliveryTiming,
-        scheduledAtUtc
+        scheduledAtUtc,
+        voucherCode
     } = req.body;
 
     const normalizedOrderType = orderType === 'Pickup' ? 'Pickup' : 'Delivery';
@@ -6018,6 +6021,55 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         let senderStopId = null;
         let recipientStopId = null;
 
+        let appliedVoucherId = null;
+        let appliedDiscountMinorUnits = 0;
+        let appliedDiscountAmount = 0;
+
+        if (voucherCode) {
+            const normalizedCode = String(voucherCode).trim().toUpperCase();
+            const [voucherRows] = await connection.query(
+                `SELECT id, type, discount_value, min_spend, max_discount, expires_at, is_active, is_redeemed, user_id
+                 FROM vouchers WHERE code = ? FOR UPDATE`,
+                [normalizedCode]
+            );
+            const voucher = voucherRows[0];
+            
+            if (!voucher) {
+                const err = new Error('Invalid voucher code'); err.status = 400; throw err;
+            }
+            if (!voucher.is_active || voucher.is_redeemed) {
+                const err = new Error('Voucher is no longer valid or has already been used'); err.status = 400; throw err;
+            }
+            if (new Date(voucher.expires_at) < new Date()) {
+                const err = new Error('Voucher has expired'); err.status = 400; throw err;
+            }
+            if (voucher.user_id && voucher.user_id !== resolvedUserId) {
+                const err = new Error('Voucher does not belong to your account'); err.status = 400; throw err;
+            }
+            
+            const minSpendMinorUnits = toMinorUnitsAllowZero(voucher.min_spend) || 0;
+            if (subtotalMinorUnits < minSpendMinorUnits) {
+                const err = new Error(`Minimum spend of RM${voucher.min_spend} required to use this voucher`); err.status = 400; throw err;
+            }
+            
+            if (voucher.type === 'fixed') {
+                appliedDiscountMinorUnits = toMinorUnitsAllowZero(voucher.discount_value) || 0;
+            } else if (voucher.type === 'percentage') {
+                appliedDiscountMinorUnits = Math.floor(subtotalMinorUnits * (Number(voucher.discount_value) / 100));
+                const maxDiscountMinorUnits = toMinorUnitsAllowZero(voucher.max_discount);
+                if (maxDiscountMinorUnits && appliedDiscountMinorUnits > maxDiscountMinorUnits) {
+                    appliedDiscountMinorUnits = maxDiscountMinorUnits;
+                }
+            }
+            
+            if (appliedDiscountMinorUnits > subtotalMinorUnits) {
+                appliedDiscountMinorUnits = subtotalMinorUnits;
+            }
+            
+            appliedVoucherId = voucher.id;
+            appliedDiscountAmount = fromMinorUnits(appliedDiscountMinorUnits);
+        }
+
         if (isLalamoveDelivery) {
             const normalizedQuotationId = String(quotationId || '').trim();
             if (!normalizedQuotationId) {
@@ -6113,7 +6165,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
             };
         }
 
-        totalAmountMinorUnits = subtotalMinorUnits + serviceFeeMinorUnits + deliveryFeeMinorUnits;
+        totalAmountMinorUnits = subtotalMinorUnits + serviceFeeMinorUnits + deliveryFeeMinorUnits - appliedDiscountMinorUnits;
         if (totalAmountMinorUnits <= 0) {
             const error = new Error('Computed order total is invalid');
             error.status = 400;
@@ -6179,8 +6231,10 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 scheduled_at_utc,
                 lalamove_ongoing_at,
                 delivery_contact_phone,
-                short_code
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                short_code,
+                voucher_id,
+                discount_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 resolvedUserId,
                 initialStatus,
@@ -6207,7 +6261,9 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 scheduledAtSql,
                 null,
                 persistedDeliveryContactPhone,
-                orderCode
+                orderCode,
+                appliedVoucherId,
+                appliedDiscountAmount
             ]
         );
         orderId = orderResult.insertId;
@@ -6260,6 +6316,13 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 paymentId: curlecPaymentProof.paymentId,
                 status: 'consumed'
             });
+        }
+
+        if (appliedVoucherId) {
+            await connection.query(
+                `UPDATE vouchers SET is_redeemed = TRUE WHERE id = ?`,
+                [appliedVoucherId]
+            );
         }
 
         await connection.commit();
@@ -7048,7 +7111,8 @@ app.put('/api/orders/:id/status', requireAdmin, async (req, res) => {
         if (normalizedStatus !== previousStatus) {
             if (normalizedStatus === 'Completed') {
                 emailService.queueOrderEventEmail(orderId, 'completed');
-            } else if (normalizedStatus === 'Cancelled' && !refund) {
+                loyaltyService.awardPointsForOrder(orderId);
+            } else if (normalizedStatus === 'Cancelled' && !shouldAttemptAutoRefund) {
                 emailService.queueOrderEventEmail(orderId, 'cancelled');
             }
         }
@@ -7633,6 +7697,7 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
             });
             if (mappedOrderStatus === 'Completed') {
                 emailService.queueOrderEventEmail(existingOrder.id, 'completed');
+                loyaltyService.awardPointsForOrder(existingOrder.id);
             } else if (mappedOrderStatus === 'Cancelled') {
                 emailService.queueOrderEventEmail(existingOrder.id, 'cancelled');
             }

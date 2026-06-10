@@ -88,6 +88,10 @@ const UserDashboard: React.FC = () => {
                  <span className="material-symbols-outlined">grid_view</span>
                  <span className="text-sm">Dashboard</span>
                </Link>
+               <Link to="/rewards" className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#e7f4e7] dark:hover:bg-white/5 transition-colors">
+                 <span className="material-symbols-outlined">stars</span>
+                 <span className="text-sm font-medium">My Rewards</span>
+               </Link>
                <Link to="/orders" className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#e7f4e7] dark:hover:bg-white/5 transition-colors">
                  <span className="material-symbols-outlined">receipt_long</span>
                  <span className="text-sm font-medium">Order History</span>

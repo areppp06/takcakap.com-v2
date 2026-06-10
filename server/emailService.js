@@ -735,8 +735,63 @@ const startWorker = () => {
     run();
 };
 
+const sendVoucherEmail = async (userId, voucherCode, discountValue) => {
+    const mailer = getTransporter();
+    if (!mailer) return;
+
+    const [userRows] = await db.query(`SELECT email, name FROM users WHERE id = ?`, [userId]);
+    const user = userRows[0];
+    if (!user || !user.email) return;
+
+    const html = `
+<!doctype html>
+<html>
+  <body style="margin:0; padding:0; background:#f7f5f8; font-family:Arial,Helvetica,sans-serif; color:#111827;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px; background:#ffffff; border:1px solid #f0e6f3; border-radius:18px; overflow:hidden;">
+            <tr>
+              <td style="padding:26px 24px 18px; background:linear-gradient(135deg, #fff5ff 0%, #ffffff 100%); border-bottom:1px solid #f4ecf6;">
+                <h1 style="margin:0; text-align:center; font-size:24px; line-height:1.2; color:#111827;">Here is your Voucher!</h1>
+                <p style="margin:10px 0 0; text-align:center; color:#6b7280; font-size:13px;">Redeemed with your points</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 24px 8px;">
+                <p>Hi ${escapeHtml(user.name)},</p>
+                <p>You have successfully redeemed a voucher worth RM${Number(discountValue).toFixed(2)}!</p>
+                <div style="background:#fafafa; border:1px solid #efefef; border-radius:12px; padding:14px; text-align:center;">
+                  <strong style="font-size:20px; color:#d61ec9;">${escapeHtml(voucherCode)}</strong>
+                </div>
+                <p>Use this code at checkout to apply your discount. The voucher is valid for 30 days.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+    await mailer.sendMail({
+        from: SMTP_FROM_NAME ? `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>` : SMTP_FROM_EMAIL,
+        to: user.email,
+        subject: 'Your TakCakap Voucher Code',
+        html: html,
+        text: `Here is your voucher code: ${voucherCode}. It gives you a discount of RM${Number(discountValue).toFixed(2)}.`
+    });
+};
+
+const queueVoucherEmail = (userId, voucherCode, discountValue) => {
+    sendVoucherEmail(userId, voucherCode, discountValue).catch((error) => {
+        console.error(`[Email] Failed to send voucher email for user ${userId}:`, error?.message || error);
+    });
+};
+
 module.exports = {
     sendOrderEventEmail,
     queueOrderEventEmail,
-    startWorker
+    startWorker,
+    queueVoucherEmail
 };

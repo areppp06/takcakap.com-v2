@@ -200,6 +200,12 @@ const Checkout: React.FC = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<CheckoutPaymentMethod>('DuitNow');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
+  // Voucher State
+  const [voucherCodeInput, setVoucherCodeInput] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [voucherError, setVoucherError] = useState('');
+  const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
+
   // Cart Validation State
   const [menuMap, setMenuMap] = useState<Record<string, MenuItem>>({});
   const [isValidating, setIsValidating] = useState(true);
@@ -466,6 +472,43 @@ const Checkout: React.FC = () => {
       }
   };
 
+  const handleApplyVoucher = async () => {
+    if (!voucherCodeInput.trim()) return;
+    setIsApplyingVoucher(true);
+    setVoucherError('');
+    try {
+        const token = localStorage.getItem('takcakap_token');
+        const response = await fetch('/api/user/vouchers/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ code: voucherCodeInput, subtotal: cartTotal })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to apply voucher');
+        setAppliedVoucher(data.voucher);
+    } catch (err: any) {
+        setVoucherError(err.message);
+        setAppliedVoucher(null);
+    } finally {
+        setIsApplyingVoucher(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+      setAppliedVoucher(null);
+      setVoucherCodeInput('');
+      setVoucherError('');
+  };
+
+  const calculateDiscount = () => {
+      if (!appliedVoucher) return 0;
+      if (appliedVoucher.type === 'percentage') {
+          const rawDiscount = (cartTotal * Number(appliedVoucher.discount_value)) / 100;
+          return appliedVoucher.max_discount ? Math.min(rawDiscount, Number(appliedVoucher.max_discount)) : rawDiscount;
+      }
+      return Number(appliedVoucher.discount_value);
+  };
+
   const navigateToOrderSuccess = useCallback(
     (
       createdOrder: {
@@ -635,7 +678,8 @@ const Checkout: React.FC = () => {
       const selectedAddress = addresses.find(a => a.id === selectedAddressId);
       const serviceFee = configuredServiceFee;
       const deliveryFee = orderType === 'Delivery' ? (deliveryQuote?.fee || 0) : 0;
-      const totalAmount = cartTotal + serviceFee + deliveryFee;
+      const discount = calculateDiscount();
+      const totalAmount = Math.max(0, cartTotal + serviceFee + deliveryFee - discount);
 
       const orderDetails: CheckoutOrderPayload = {
           orderType,
@@ -660,6 +704,7 @@ const Checkout: React.FC = () => {
           deliveryTiming,
           scheduledAtUtc: scheduledAtUtc || undefined,
           paymentMethod: selectedPaymentMethod,
+          voucherCode: appliedVoucher?.code,
           recipient: {
               name: activeUser.name,
               phone: selectedAddress?.phone || activeUser.phoneNumber || '',
@@ -860,7 +905,8 @@ const Checkout: React.FC = () => {
 
   const serviceFee = configuredServiceFee;
   const deliveryFee = orderType === 'Delivery' ? (deliveryQuote?.fee || 0) : 0;
-  const total = cartTotal + serviceFee + deliveryFee;
+  const discountAmount = calculateDiscount();
+  const total = Math.max(0, cartTotal + serviceFee + deliveryFee - discountAmount);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#0d1c0d] dark:text-white">
@@ -1252,6 +1298,39 @@ const Checkout: React.FC = () => {
                           </div>
                       )}
                    
+                      {/* Voucher Section */}
+                      <div className="py-2 border-b border-gray-200 dark:border-gray-600 mb-2">
+                        {appliedVoucher ? (
+                            <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                                <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                                    <span className="material-symbols-outlined text-lg">local_activity</span>
+                                    <span className="font-bold text-sm">Voucher {appliedVoucher.code} applied</span>
+                                </div>
+                                <button onClick={handleRemoveVoucher} className="text-gray-500 hover:text-red-500">
+                                    <span className="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Enter Voucher Code"
+                                    value={voucherCodeInput}
+                                    onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                                    className="flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                />
+                                <button 
+                                    onClick={handleApplyVoucher}
+                                    disabled={!voucherCodeInput.trim() || isApplyingVoucher}
+                                    className="bg-gray-800 dark:bg-gray-200 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50"
+                                >
+                                    {isApplyingVoucher ? '...' : 'Apply'}
+                                </button>
+                            </div>
+                        )}
+                        {voucherError && <p className="text-red-500 text-xs mt-1">{voucherError}</p>}
+                      </div>
+
                       <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
                          <span>Subtotal</span>
                          <span className="font-bold text-[#0d1c0d] dark:text-white">{formatCurrency(cartTotal)}</span>
@@ -1264,6 +1343,12 @@ const Checkout: React.FC = () => {
                           <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
                              <span>Delivery Fee (Lalamove)</span>
                              <span className="font-bold text-[#0d1c0d] dark:text-white">{isQuoting ? '...' : formatCurrency(deliveryFee)}</span>
+                          </div>
+                      )}
+                      {discountAmount > 0 && (
+                          <div className="flex justify-between text-sm text-primary">
+                             <span>Discount</span>
+                             <span className="font-bold">- {formatCurrency(discountAmount)}</span>
                           </div>
                       )}
                       <div className="pt-4 border-t border-gray-200 dark:border-gray-600 flex justify-between items-end">
