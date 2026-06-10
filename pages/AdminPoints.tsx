@@ -11,6 +11,8 @@ export default function AdminPoints() {
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [adjusting, setAdjusting] = useState(false);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 15;
     
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [action, setAction] = useState<'add' | 'deduct'>('add');
@@ -166,7 +168,10 @@ export default function AdminPoints() {
                                 <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
                                     {loading ? (
                                         <tr><td colSpan={4} className="p-6 text-center text-gray-500">Loading...</td></tr>
-                                    ) : users.map(u => (
+                                    ) : (() => {
+                                        const totalPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
+                                        const currentUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+                                        return currentUsers.map(u => (
                                         <tr key={u.id}>
                                             <td className="px-6 py-4 font-bold">{u.name}</td>
                                             <td className="px-6 py-4">{u.email}</td>
@@ -180,10 +185,32 @@ export default function AdminPoints() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
+                                        ));
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
+                        {!loading && users.length > 0 && (
+                            <div className="px-6 py-4 border-t border-[#e7f4e7] dark:border-white/10 flex justify-between items-center bg-gray-50 dark:bg-white/5">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-sm font-semibold">
+                                    Page {page} of {Math.max(1, Math.ceil(users.length / PAGE_SIZE))}
+                                </span>
+                                <button
+                                    onClick={() => setPage(p => Math.min(Math.ceil(users.length / PAGE_SIZE), p + 1))}
+                                    disabled={page === Math.max(1, Math.ceil(users.length / PAGE_SIZE))}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div>

@@ -18,6 +18,11 @@ export default function PointsDashboard() {
     const [error, setError] = useState('');
     const [confirmRedeem, setConfirmRedeem] = useState<number | null>(null);
     const [successCode, setSuccessCode] = useState<string | null>(null);
+    const [vouchersPage, setVouchersPage] = useState(1);
+    const [historyPage, setHistoryPage] = useState(1);
+    
+    const VOUCHERS_PER_PAGE = 4;
+    const HISTORY_PER_PAGE = 10;
 
     useEffect(() => {
         if (!user || !token) {
@@ -81,10 +86,18 @@ export default function PointsDashboard() {
     if (loading) return <div className="p-8 text-center">Loading points data...</div>;
 
     const balance = pointsData?.balance || 0;
+    
+    const displayVouchers = vouchers.filter(v => v.is_active && !v.is_redeemed && (!v.expires_at || new Date(v.expires_at) > new Date()));
+    const totalVoucherPages = Math.max(1, Math.ceil(displayVouchers.length / VOUCHERS_PER_PAGE));
+    const currentVouchers = displayVouchers.slice((vouchersPage - 1) * VOUCHERS_PER_PAGE, vouchersPage * VOUCHERS_PER_PAGE);
+
+    const transactions = pointsData?.transactions || [];
+    const totalHistoryPages = Math.max(1, Math.ceil(transactions.length / HISTORY_PER_PAGE));
+    const currentTransactions = transactions.slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE);
 
     return (
         <UserDashboardLayout>
-            <h1 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">Modern Rewards Dashboard</h1>
+            <h1 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">My Rewards</h1>
             
             {error && <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">{error}</div>}
 
@@ -95,6 +108,7 @@ export default function PointsDashboard() {
                     <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl p-8 text-white shadow-md mb-6">
                         <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">Total Points</p>
                         <div className="text-4xl md:text-5xl font-extrabold">{balance.toLocaleString()} pts</div>
+                        <p className="text-sm font-medium mt-2 opacity-90">≈ RM {(balance / 200).toFixed(2)} (RM1 = 200 pts)</p>
                     </div>
                     
                     {/* Redeem Cards */}
@@ -142,24 +156,21 @@ export default function PointsDashboard() {
 
                     {/* My Vouchers */}
                     <h2 className="text-xl font-bold mb-4 text-gray-900">My Vouchers</h2>
-                    {vouchers.length === 0 ? (
-                        <p className="text-gray-500">No vouchers yet.</p>
+                    {displayVouchers.length === 0 ? (
+                        <p className="text-gray-500 mb-8">No vouchers available.</p>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {vouchers.map(v => {
-                                const isAvailable = !v.is_redeemed && v.is_active;
-                                return (
-                                    <div key={v.id} className={`bg-white border rounded-xl p-5 shadow-sm relative flex flex-col justify-between ${!isAvailable ? 'opacity-60 bg-gray-50' : 'border-gray-200'}`}>
+                        <div className="mb-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                {currentVouchers.map(v => (
+                                    <div key={v.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
                                         <div className="flex justify-between items-start mb-1">
                                             <div className="font-bold text-sm text-gray-800">VOUCHER - {v.code}</div>
-                                            {isAvailable ? (
-                                                <span className="bg-[#e4f7eb] text-[#2d9154] text-xs font-bold px-2 py-0.5 rounded-full">(Active)</span>
-                                            ) : (
-                                                <span className="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{v.is_redeemed ? '(Redeemed)' : '(Expired)'}</span>
-                                            )}
+                                            <span className="bg-[#e4f7eb] text-[#2d9154] text-xs font-bold px-2 py-0.5 rounded-full">(Active)</span>
                                         </div>
                                         <div className="font-extrabold text-xl mb-1 text-gray-900">RM {Number(v.discount_value).toFixed(0)}</div>
-                                        <div className="text-xs text-gray-600 mb-2">Expires - {new Date(v.expires_at).toLocaleDateString()}</div>
+                                        {v.expires_at && (
+                                            <div className="text-xs text-gray-600 mb-2">Expires - {new Date(v.expires_at).toLocaleDateString()}</div>
+                                        )}
                                         
                                         <button 
                                             onClick={() => handleCopy(v.code)}
@@ -169,8 +180,27 @@ export default function PointsDashboard() {
                                             <span className="material-symbols-outlined text-[18px] leading-none">content_copy</span>
                                         </button>
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
+                            {totalVoucherPages > 1 && (
+                                <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
+                                    <button 
+                                        onClick={() => setVouchersPage(p => Math.max(1, p - 1))}
+                                        disabled={vouchersPage === 1}
+                                        className="px-3 py-1 bg-white border border-gray-300 rounded text-sm disabled:opacity-50"
+                                    >
+                                        Prev
+                                    </button>
+                                    <span className="text-sm font-semibold">Page {vouchersPage} of {totalVoucherPages}</span>
+                                    <button 
+                                        onClick={() => setVouchersPage(p => Math.min(totalVoucherPages, p + 1))}
+                                        disabled={vouchersPage === totalVoucherPages}
+                                        className="px-3 py-1 bg-white border border-gray-300 rounded text-sm disabled:opacity-50"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -179,24 +209,45 @@ export default function PointsDashboard() {
                 <div className="w-full lg:w-80">
                     <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                         <h2 className="text-lg font-bold mb-6 text-gray-900">Points History</h2>
-                        {(!pointsData?.transactions || pointsData.transactions.length === 0) ? (
+                        {transactions.length === 0 ? (
                             <p className="text-gray-500 text-sm">No recent transactions.</p>
                         ) : (
-                            <div className="relative border-l border-gray-200 ml-2 space-y-6">
-                                {pointsData.transactions.map((tx) => {
-                                    const isPositive = tx.points > 0;
-                                    return (
-                                        <div key={tx.id} className="relative pl-6">
-                                            <div className={`absolute -left-[5px] top-[6px] w-[9px] h-[9px] rounded-full ring-4 ring-white ${isPositive ? 'bg-[#2ea65a]' : 'bg-[#e44949]'}`}></div>
-                                            <div className={`font-bold text-lg leading-none mb-1 ${isPositive ? 'text-[#2ea65a]' : 'text-[#e44949]'}`}>
-                                                {isPositive ? '+' : ''}{tx.points.toLocaleString()}
+                            <>
+                                <div className="relative border-l border-gray-200 ml-2 space-y-6 mb-6">
+                                    {currentTransactions.map((tx) => {
+                                        const isPositive = tx.points > 0;
+                                        return (
+                                            <div key={tx.id} className="relative pl-6">
+                                                <div className={`absolute -left-[5px] top-[6px] w-[9px] h-[9px] rounded-full ring-4 ring-white ${isPositive ? 'bg-[#2ea65a]' : 'bg-[#e44949]'}`}></div>
+                                                <div className={`font-bold text-lg leading-none mb-1 ${isPositive ? 'text-[#2ea65a]' : 'text-[#e44949]'}`}>
+                                                    {isPositive ? '+' : ''}{tx.points.toLocaleString()}
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-800 leading-snug">{tx.description || tx.transaction_type}</div>
+                                                <div className="text-xs text-gray-500 mt-1">({new Date(tx.created_at).toLocaleString('en-MY', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})</div>
                                             </div>
-                                            <div className="text-sm font-semibold text-gray-800 leading-snug">{tx.description || tx.transaction_type}</div>
-                                            <div className="text-xs text-gray-500 mt-1">({new Date(tx.created_at).toLocaleString()})</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {totalHistoryPages > 1 && (
+                                    <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200 mt-4">
+                                        <button 
+                                            onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                            disabled={historyPage === 1}
+                                            className="px-3 py-1 bg-white border border-gray-300 rounded text-sm disabled:opacity-50"
+                                        >
+                                            Prev
+                                        </button>
+                                        <span className="text-xs font-semibold">Pg {historyPage} / {totalHistoryPages}</span>
+                                        <button 
+                                            onClick={() => setHistoryPage(p => Math.min(totalHistoryPages, p + 1))}
+                                            disabled={historyPage === totalHistoryPages}
+                                            className="px-3 py-1 bg-white border border-gray-300 rounded text-sm disabled:opacity-50"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>

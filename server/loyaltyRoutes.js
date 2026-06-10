@@ -224,7 +224,7 @@ module.exports = (requireAuth, requireAdmin) => {
                 WHERE transaction_type IN ('earned', 'admin_add')
             `);
             const totalPoints = Number(rows[0]?.total_distributed || 0);
-            const estValueRM = totalPoints / 10;
+            const estValueRM = totalPoints / 2;
             res.json({ totalDistributed: totalPoints, estValueRM });
         } catch (err) {
             console.error('Failed to fetch points stats:', err);

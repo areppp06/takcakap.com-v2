@@ -114,7 +114,7 @@ async function redeemVoucher(userId, pointsToRedeem, voucherConfig) {
         await connection.query(
             `INSERT INTO points_transactions (user_id, points, transaction_type, reference_id, description)
              VALUES (?, ?, 'redeemed', ?, ?)`,
-            [userId, -pointsToRedeem, voucherResult.insertId, `Redeemed points for voucher ${code}`]
+            [userId, -pointsToRedeem, voucherResult.insertId, `Redeemed - RM ${voucherConfig.discountValue} voucher`]
         );
 
         await connection.commit();

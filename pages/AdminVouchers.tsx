@@ -12,6 +12,8 @@ export default function AdminVouchers() {
     const [vouchers, setVouchers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 15;
     
     const [stats, setStats] = useState({ today: 0, thisWeek: 0, thisMonth: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
@@ -238,7 +240,10 @@ export default function AdminVouchers() {
                                 <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
                                     {loading ? (
                                         <tr><td colSpan={5} className="p-6 text-center text-gray-500">Loading...</td></tr>
-                                    ) : vouchers.map(v => (
+                                    ) : (() => {
+                                        const totalPages = Math.max(1, Math.ceil(vouchers.length / PAGE_SIZE));
+                                        const currentVouchers = vouchers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+                                        return currentVouchers.map(v => (
                                         <tr key={v.id} className={v.is_redeemed ? 'opacity-50' : ''}>
                                             <td className="px-6 py-4">
                                                 <div className="font-bold tracking-wide">{v.code}</div>
@@ -272,10 +277,32 @@ export default function AdminVouchers() {
                                                 )}
                                             </td>
                                         </tr>
-                                    ))}
+                                        ));
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
+                        {!loading && vouchers.length > 0 && (
+                            <div className="px-6 py-4 border-t border-[#e7f4e7] dark:border-white/10 flex justify-between items-center bg-gray-50 dark:bg-white/5">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-sm font-semibold">
+                                    Page {page} of {Math.max(1, Math.ceil(vouchers.length / PAGE_SIZE))}
+                                </span>
+                                <button
+                                    onClick={() => setPage(p => Math.min(Math.ceil(vouchers.length / PAGE_SIZE), p + 1))}
+                                    disabled={page === Math.max(1, Math.ceil(vouchers.length / PAGE_SIZE))}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div>
