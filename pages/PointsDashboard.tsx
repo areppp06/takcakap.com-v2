@@ -15,6 +15,8 @@ export default function PointsDashboard() {
     const [loading, setLoading] = useState(true);
     const [redeeming, setRedeeming] = useState(false);
     const [error, setError] = useState('');
+    const [confirmRedeem, setConfirmRedeem] = useState<number | null>(null);
+    const [successCode, setSuccessCode] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user || !token) {
@@ -41,9 +43,13 @@ export default function PointsDashboard() {
         }
     };
 
-    const handleRedeem = async (pointsToRedeem: number) => {
-        if (!confirm(`Are you sure you want to redeem ${pointsToRedeem} points for RM${pointsToRedeem / 200}?`)) return;
-        
+    const handleRedeemClick = (points: number) => {
+        setConfirmRedeem(points);
+    };
+
+    const executeRedeem = async () => {
+        if (!confirmRedeem) return;
+        const pointsToRedeem = confirmRedeem;
         setRedeeming(true);
         setError('');
         try {
@@ -55,10 +61,12 @@ export default function PointsDashboard() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to redeem');
             
-            alert(`Success! Your voucher code is ${data.code}. It has been emailed to you.`);
+            setConfirmRedeem(null);
+            setSuccessCode(data.code);
             fetchData();
         } catch (err: any) {
             setError(err.message);
+            setConfirmRedeem(null);
         } finally {
             setRedeeming(false);
         }
@@ -80,7 +88,7 @@ export default function PointsDashboard() {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <button 
-                        onClick={() => handleRedeem(200)}
+                        onClick={() => handleRedeemClick(200)}
                         disabled={balance < 200 || redeeming}
                         className="bg-white/20 hover:bg-white/30 disabled:opacity-50 transition rounded-lg p-4 text-left"
                     >
@@ -88,7 +96,7 @@ export default function PointsDashboard() {
                         <div className="text-sm text-purple-200">Redeem 200 pts</div>
                     </button>
                     <button 
-                        onClick={() => handleRedeem(1000)}
+                        onClick={() => handleRedeemClick(1000)}
                         disabled={balance < 1000 || redeeming}
                         className="bg-white/20 hover:bg-white/30 disabled:opacity-50 transition rounded-lg p-4 text-left"
                     >
@@ -96,7 +104,7 @@ export default function PointsDashboard() {
                         <div className="text-sm text-purple-200">Redeem 1,000 pts</div>
                     </button>
                     <button 
-                        onClick={() => handleRedeem(2000)}
+                        onClick={() => handleRedeemClick(2000)}
                         disabled={balance < 2000 || redeeming}
                         className="bg-white/20 hover:bg-white/30 disabled:opacity-50 transition rounded-lg p-4 text-left"
                     >
@@ -150,6 +158,62 @@ export default function PointsDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* Modals */}
+            {confirmRedeem && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl text-[#0d1c0d] dark:text-white">
+                        <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="material-icons text-3xl">stars</span>
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Redeem Points</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6 font-medium">
+                            Are you sure you want to redeem {confirmRedeem} points for RM{confirmRedeem / 200}?
+                        </p>
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setConfirmRedeem(null)}
+                                className="flex-1 py-3 font-bold rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={executeRedeem}
+                                disabled={redeeming}
+                                className="flex-1 py-3 font-bold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition disabled:opacity-50"
+                            >
+                                {redeeming ? 'Processing...' : 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {successCode && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl text-[#0d1c0d] dark:text-white">
+                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="material-icons text-3xl">check_circle</span>
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Success!</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-4 font-medium">
+                            You've successfully redeemed your points. Your voucher code is:
+                        </p>
+                        <div className="font-mono font-bold text-2xl text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 py-4 rounded-lg border border-indigo-100 dark:border-indigo-800 mb-6 tracking-wider">
+                            {successCode}
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">
+                            We've also emailed this code to you. You can use it during checkout.
+                        </p>
+                        <button 
+                            onClick={() => setSuccessCode(null)}
+                            className="w-full py-3 font-bold rounded-xl bg-primary text-background-dark hover:bg-primary/90 transition"
+                        >
+                            Got it!
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
