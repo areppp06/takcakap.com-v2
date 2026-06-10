@@ -27,6 +27,7 @@ const getKualaLumpurDateString = () => {
 const AdminDashboard: React.FC = () => {
   const [status, setStatus] = useState<{status: string, mode: string}>({ status: 'checking', mode: 'server' });
   const [salesOverview, setSalesOverview] = useState<AdminSalesOverview | null>(null);
+  const [voucherStats, setVoucherStats] = useState({ today: 0, thisWeek: 0, thisMonth: 0 });
   const [isSalesLoading, setIsSalesLoading] = useState(true);
   const [salesError, setSalesError] = useState('');
   const [isExporting, setIsExporting] = useState(false);
@@ -70,6 +71,24 @@ const AdminDashboard: React.FC = () => {
     loadSalesOverview(true);
     const interval = setInterval(() => loadSalesOverview(false), 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const loadVoucherStats = async () => {
+      try {
+        const token = localStorage.getItem('takcakap_auth_token');
+        if (!token) return;
+        const res = await fetch('/api/admin/vouchers/stats', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setVoucherStats(await res.json());
+        }
+      } catch (error) {
+        console.error('Failed to fetch voucher stats', error);
+      }
+    };
+    loadVoucherStats();
   }, []);
 
   const handleLogout = () => {
@@ -241,6 +260,41 @@ const AdminDashboard: React.FC = () => {
                    </p>
                 </div>
              ))}
+          </section>
+
+          {/* Voucher Stats Grid */}
+          <h3 className="text-xl font-bold mb-4">Voucher Redemptions</h3>
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-primary/10 shadow-sm relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4 gap-2">
+                   <div>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Redeemed Today</p>
+                      <h3 className="text-3xl font-bold mt-1 text-[#0d1c0d] dark:text-white">
+                         {formatCurrency(voucherStats.today)}
+                      </h3>
+                   </div>
+                </div>
+             </div>
+             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-primary/10 shadow-sm relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4 gap-2">
+                   <div>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Redeemed This Week</p>
+                      <h3 className="text-3xl font-bold mt-1 text-[#0d1c0d] dark:text-white">
+                         {formatCurrency(voucherStats.thisWeek)}
+                      </h3>
+                   </div>
+                </div>
+             </div>
+             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-primary/10 shadow-sm relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4 gap-2">
+                   <div>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Redeemed This Month</p>
+                      <h3 className="text-3xl font-bold mt-1 text-[#0d1c0d] dark:text-white">
+                         {formatCurrency(voucherStats.thisMonth)}
+                      </h3>
+                   </div>
+                </div>
+             </div>
           </section>
 
           {salesError && (

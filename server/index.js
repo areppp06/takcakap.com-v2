@@ -4038,7 +4038,7 @@ app.get('/api/admin/customers', requireAdmin, async (req, res) => {
                     COALESCE(SUM(o.total_amount), 0) AS total_spent,
                     MAX(o.created_at) AS last_order_at
                 FROM users u
-                LEFT JOIN orders o ON o.user_id = u.id
+                LEFT JOIN orders o ON o.user_id = u.id AND o.status NOT IN ('Cancelled', 'Pending Payment')
                 WHERE ${where.join(' AND ')}
                 GROUP BY
                     u.id, u.name, u.email, u.phone_number, u.avatar_url, u.created_at, u.is_suspended, u.suspended_at
