@@ -72,115 +72,157 @@ export default function PointsDashboard() {
         }
     };
 
+    const handleCopy = (code: string) => {
+        navigator.clipboard.writeText(code);
+        alert('Copied to clipboard!');
+    };
+
     if (loading) return <div className="p-8 text-center">Loading points data...</div>;
 
     const balance = pointsData?.balance || 0;
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-8">
-            <h1 className="text-3xl font-bold mb-8">My Rewards</h1>
+        <div className="max-w-6xl mx-auto p-4 md:p-8">
+            <h1 className="text-3xl font-bold mb-8 text-center">Modern Rewards Dashboard</h1>
             
             {error && <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">{error}</div>}
 
-            <div className="bg-primary rounded-2xl p-8 text-background-dark shadow-xl mb-8">
-                <p className="opacity-80 text-sm uppercase tracking-wider mb-2 font-bold">Available Points</p>
-                <div className="text-5xl font-black mb-6">{balance.toLocaleString()} pts</div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <button 
-                        onClick={() => handleRedeemClick(200)}
-                        disabled={balance < 200 || redeeming}
-                        className="bg-black/10 hover:bg-black/20 disabled:opacity-50 transition rounded-lg p-4 text-left"
-                    >
-                        <div className="font-bold text-xl mb-1">RM1 Off</div>
-                        <div className="text-sm opacity-80 font-medium">Redeem 200 pts</div>
-                    </button>
-                    <button 
-                        onClick={() => handleRedeemClick(1000)}
-                        disabled={balance < 1000 || redeeming}
-                        className="bg-black/10 hover:bg-black/20 disabled:opacity-50 transition rounded-lg p-4 text-left"
-                    >
-                        <div className="font-bold text-xl mb-1">RM5 Off</div>
-                        <div className="text-sm opacity-80 font-medium">Redeem 1,000 pts</div>
-                    </button>
-                    <button 
-                        onClick={() => handleRedeemClick(2000)}
-                        disabled={balance < 2000 || redeeming}
-                        className="bg-black/10 hover:bg-black/20 disabled:opacity-50 transition rounded-lg p-4 text-left"
-                    >
-                        <div className="font-bold text-xl mb-1">RM10 Off</div>
-                        <div className="text-sm opacity-80 font-medium">Redeem 2,000 pts</div>
-                    </button>
-                </div>
-            </div>
+            <div className="flex flex-col lg:flex-row gap-8">
+                {/* Left Column: Banner, Redeem Cards, Vouchers */}
+                <div className="flex-1">
+                    {/* Banner */}
+                    <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl p-8 text-white shadow-md mb-6">
+                        <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">Total Points</p>
+                        <div className="text-4xl md:text-5xl font-extrabold">{balance.toLocaleString()} pts</div>
+                    </div>
+                    
+                    {/* Redeem Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                        <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
+                            <div>
+                                <div className="font-extrabold text-lg mb-1 text-gray-900">RM1 Off</div>
+                                <div className="text-sm text-gray-600 mb-4">(Redeem 200 pts)</div>
+                            </div>
+                            <button 
+                                onClick={() => handleRedeemClick(200)}
+                                disabled={balance < 200 || redeeming}
+                                className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                            >
+                                Redeem
+                            </button>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
+                            <div>
+                                <div className="font-extrabold text-lg mb-1 text-gray-900">RM5 Off</div>
+                                <div className="text-sm text-gray-600 mb-4">(Redeem 1,000 pts)</div>
+                            </div>
+                            <button 
+                                onClick={() => handleRedeemClick(1000)}
+                                disabled={balance < 1000 || redeeming}
+                                className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                            >
+                                Redeem
+                            </button>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
+                            <div>
+                                <div className="font-extrabold text-lg mb-1 text-gray-900">RM10 Off</div>
+                                <div className="text-sm text-gray-600 mb-4">(Redeem 2,000 pts)</div>
+                            </div>
+                            <button 
+                                onClick={() => handleRedeemClick(2000)}
+                                disabled={balance < 2000 || redeeming}
+                                className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                            >
+                                Redeem
+                            </button>
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div>
-                    <h2 className="text-xl font-bold mb-4">My Vouchers</h2>
+                    {/* My Vouchers */}
+                    <h2 className="text-xl font-bold mb-4 text-gray-900">My Vouchers</h2>
                     {vouchers.length === 0 ? (
                         <p className="text-gray-500">No vouchers yet.</p>
                     ) : (
-                        <div className="space-y-4">
-                            {vouchers.map(v => (
-                                <div key={v.id} className={`border rounded-lg p-4 ${v.is_redeemed || !v.is_active ? 'opacity-50 bg-gray-50 dark:bg-white/5 border-[#e7f4e7] dark:border-white/10' : 'bg-white dark:bg-white/5 border-[#e7f4e7] dark:border-white/10 shadow-sm'}`}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="font-mono font-bold text-lg text-primary">{v.code}</div>
-                                        <div className="text-sm font-bold">RM{Number(v.discount_value).toFixed(2)} Off</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {vouchers.map(v => {
+                                const isAvailable = !v.is_redeemed && v.is_active;
+                                return (
+                                    <div key={v.id} className={`bg-white border rounded-xl p-5 shadow-sm relative flex flex-col justify-between ${!isAvailable ? 'opacity-60 bg-gray-50' : 'border-gray-200'}`}>
+                                        <div className="flex justify-between items-start mb-1">
+                                            <div className="font-bold text-sm text-gray-800">VOUCHER - {v.code}</div>
+                                            {isAvailable ? (
+                                                <span className="bg-[#e4f7eb] text-[#2d9154] text-xs font-bold px-2 py-0.5 rounded-full">(Active)</span>
+                                            ) : (
+                                                <span className="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{v.is_redeemed ? '(Redeemed)' : '(Expired)'}</span>
+                                            )}
+                                        </div>
+                                        <div className="font-extrabold text-xl mb-1 text-gray-900">RM {Number(v.discount_value).toFixed(0)}</div>
+                                        <div className="text-xs text-gray-600 mb-2">Expires - {new Date(v.expires_at).toLocaleDateString()}</div>
+                                        
+                                        <button 
+                                            onClick={() => handleCopy(v.code)}
+                                            className="absolute bottom-4 right-4 bg-gray-100 hover:bg-gray-200 p-2 rounded-lg text-gray-600 transition"
+                                            title="Copy Code"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px] leading-none">content_copy</span>
+                                        </button>
                                     </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 flex justify-between">
-                                        <span>Expires: {new Date(v.expires_at).toLocaleDateString()}</span>
-                                        <span>{v.is_redeemed ? 'Redeemed' : !v.is_active ? 'Inactive' : 'Available'}</span>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
 
-                <div>
-                    <h2 className="text-xl font-bold mb-4">Points History</h2>
-                    {(!pointsData?.transactions || pointsData.transactions.length === 0) ? (
-                        <p className="text-gray-500">No recent transactions.</p>
-                    ) : (
-                        <div className="bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-                            {pointsData.transactions.map((tx, idx) => (
-                                <div key={tx.id} className={`p-4 flex justify-between items-center ${idx !== pointsData.transactions.length - 1 ? 'border-b border-[#e7f4e7] dark:border-white/10' : ''}`}>
-                                    <div>
-                                        <div className="font-medium text-sm text-gray-800 dark:text-gray-200">{tx.description || tx.transaction_type}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">{new Date(tx.created_at).toLocaleString()}</div>
-                                    </div>
-                                    <div className={`font-bold ${tx.points > 0 ? 'text-primary' : 'text-red-500'}`}>
-                                        {tx.points > 0 ? '+' : ''}{tx.points}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                {/* Right Column: Points History Sidebar */}
+                <div className="w-full lg:w-80">
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h2 className="text-lg font-bold mb-6 text-gray-900">Points History</h2>
+                        {(!pointsData?.transactions || pointsData.transactions.length === 0) ? (
+                            <p className="text-gray-500 text-sm">No recent transactions.</p>
+                        ) : (
+                            <div className="relative border-l border-gray-200 ml-2 space-y-6">
+                                {pointsData.transactions.map((tx) => {
+                                    const isPositive = tx.points > 0;
+                                    return (
+                                        <div key={tx.id} className="relative pl-6">
+                                            <div className={`absolute -left-[5px] top-[6px] w-[9px] h-[9px] rounded-full ring-4 ring-white ${isPositive ? 'bg-[#2ea65a]' : 'bg-[#e44949]'}`}></div>
+                                            <div className={`font-bold text-lg leading-none mb-1 ${isPositive ? 'text-[#2ea65a]' : 'text-[#e44949]'}`}>
+                                                {isPositive ? '+' : ''}{tx.points.toLocaleString()}
+                                            </div>
+                                            <div className="text-sm font-semibold text-gray-800 leading-snug">{tx.description || tx.transaction_type}</div>
+                                            <div className="text-xs text-gray-500 mt-1">({new Date(tx.created_at).toLocaleString()})</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Modals */}
             {confirmRedeem && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl text-[#0d1c0d] dark:text-white">
-                        <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div className="bg-white border border-gray-200 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl text-gray-900">
+                        <div className="w-16 h-16 bg-[#6a35d8]/10 text-[#6a35d8] rounded-full flex items-center justify-center mx-auto mb-4">
                             <span className="material-symbols-outlined text-3xl">stars</span>
                         </div>
                         <h3 className="text-xl font-bold mb-2">Redeem Points</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6 font-medium">
+                        <p className="text-gray-600 mb-6 font-medium">
                             Are you sure you want to redeem {confirmRedeem} points for RM{confirmRedeem / 200}?
                         </p>
                         <div className="flex gap-3">
                             <button 
                                 onClick={() => setConfirmRedeem(null)}
-                                className="flex-1 py-3 font-bold rounded-xl border border-gray-300 dark:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5 transition"
+                                className="flex-1 py-3 font-bold rounded-xl border border-gray-300 hover:bg-gray-50 transition"
                             >
                                 Cancel
                             </button>
                             <button 
                                 onClick={executeRedeem}
                                 disabled={redeeming}
-                                className="flex-1 py-3 font-bold rounded-xl bg-primary text-background-dark hover:bg-primary/90 transition disabled:opacity-50"
+                                className="flex-1 py-3 font-bold rounded-xl bg-[#6a35d8] text-white hover:bg-[#5b2ab9] transition disabled:opacity-50"
                             >
                                 {redeeming ? 'Processing...' : 'Confirm'}
                             </button>
@@ -191,23 +233,23 @@ export default function PointsDashboard() {
 
             {successCode && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl text-[#0d1c0d] dark:text-white">
-                        <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div className="bg-white border border-gray-200 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl text-gray-900">
+                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
                             <span className="material-symbols-outlined text-3xl">check_circle</span>
                         </div>
                         <h3 className="text-xl font-bold mb-2">Success!</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-4 font-medium">
+                        <p className="text-gray-600 mb-4 font-medium">
                             You've successfully redeemed your points. Your voucher code is:
                         </p>
-                        <div className="font-mono font-bold text-2xl text-primary bg-primary/10 py-4 rounded-lg border border-primary/20 mb-6 tracking-wider">
+                        <div className="font-mono font-bold text-2xl text-[#6a35d8] bg-[#6a35d8]/10 py-4 rounded-lg border border-[#6a35d8]/20 mb-6 tracking-wider">
                             {successCode}
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">
+                        <p className="text-sm text-gray-500 mb-6 font-medium">
                             We've also emailed this code to you. You can use it during checkout.
                         </p>
                         <button 
                             onClick={() => setSuccessCode(null)}
-                            className="w-full py-3 font-bold rounded-xl bg-primary text-background-dark hover:bg-primary/90 transition"
+                            className="w-full py-3 font-bold rounded-xl bg-[#6a35d8] text-white hover:bg-[#5b2ab9] transition"
                         >
                             Got it!
                         </button>
