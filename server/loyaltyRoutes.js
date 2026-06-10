@@ -216,5 +216,67 @@ module.exports = (requireAuth, requireAdmin) => {
         }
     });
 
+    router.get('/admin/points/stats', requireAdmin, async (req, res) => {
+        try {
+            const [rows] = await db.query(`
+                SELECT SUM(points) as total_distributed
+                FROM points_transactions
+                WHERE transaction_type IN ('earned', 'admin_add')
+            `);
+            const totalPoints = Number(rows[0]?.total_distributed || 0);
+            const estValueRM = totalPoints / 10;
+            res.json({ totalDistributed: totalPoints, estValueRM });
+        } catch (err) {
+            console.error('Failed to fetch points stats:', err);
+            res.status(500).json({ error: 'Failed to fetch points stats' });
+        }
+    });
+
+    router.get('/admin/vouchers/stats', requireAdmin, async (req, res) => {
+        try {
+            const [rows] = await db.query(`
+                SELECT 
+                    SUM(CASE WHEN DATE(created_at) = CURDATE() THEN discount_amount ELSE 0 END) as today,
+                    SUM(CASE WHEN YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1) THEN discount_amount ELSE 0 END) as this_week,
+                    SUM(CASE WHEN MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE()) THEN discount_amount ELSE 0 END) as this_month
+                FROM orders
+                WHERE voucher_id IS NOT NULL AND status != 'Cancelled'
+            `);
+            
+            res.json({
+                today: Number(rows[0]?.today || 0),
+                thisWeek: Number(rows[0]?.this_week || 0),
+                thisMonth: Number(rows[0]?.this_month || 0)
+            });
+        } catch (err) {
+            console.error('Failed to fetch voucher stats:', err);
+            res.status(500).json({ error: 'Failed to fetch voucher stats' });
+        }
+    });
+
+    router.get('/admin/vouchers/export', requireAdmin, async (req, res) => {
+        try {
+            const [vouchers] = await db.query(`
+                SELECT v.code, v.type, v.discount_value, v.min_spend, v.max_discount, v.expires_at, v.is_active, v.is_redeemed, v.created_at, u.email as assigned_to
+                FROM vouchers v
+                LEFT JOIN users u ON v.user_id = u.id
+                ORDER BY v.created_at DESC
+            `);
+            
+            let csv = 'Code,Type,Value,Min Spend,Max Discount,Expires At,Assigned To,Active,Redeemed,Created At\n';
+            vouchers.forEach(v => {
+                const value = v.type === 'percentage' ? `${v.discount_value}%` : `RM${v.discount_value}`;
+                csv += `"${v.code}","${v.type}","${value}","${v.min_spend}","${v.max_discount || ''}","${new Date(v.expires_at).toISOString()}","${v.assigned_to || 'Public'}","${v.is_active}","${v.is_redeemed}","${new Date(v.created_at).toISOString()}"\n`;
+            });
+
+            res.header('Content-Type', 'text/csv');
+            res.attachment(`vouchers_export_${new Date().toISOString().slice(0,10)}.csv`);
+            res.send(csv);
+        } catch (err) {
+            console.error('Failed to export vouchers:', err);
+            res.status(500).json({ error: 'Failed to export vouchers' });
+        }
+    });
+
     return router;
 };
