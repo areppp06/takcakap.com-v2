@@ -14,7 +14,7 @@ export default function AdminVouchers() {
     const [minSpend, setMinSpend] = useState<number | ''>('');
     const [maxDiscount, setMaxDiscount] = useState<number | ''>('');
     const [expiresAt, setExpiresAt] = useState('');
-    const [userId, setUserId] = useState('');
+    const [userEmail, setUserEmail] = useState('');
 
     useEffect(() => {
         fetchVouchers();
@@ -49,7 +49,7 @@ export default function AdminVouchers() {
                 min_spend: minSpend ? Number(minSpend) : 0,
                 max_discount: maxDiscount ? Number(maxDiscount) : null,
                 expires_at: new Date(expiresAt).toISOString(),
-                user_id: userId || null
+                user_email: userEmail || null
             };
             const res = await fetch('/api/admin/vouchers', {
                 method: 'POST',
@@ -64,7 +64,7 @@ export default function AdminVouchers() {
             setMinSpend('');
             setMaxDiscount('');
             setExpiresAt('');
-            setUserId('');
+            setUserEmail('');
             fetchVouchers();
         } catch (err: any) {
             alert(err.message);
@@ -172,8 +172,8 @@ export default function AdminVouchers() {
                                 <input required type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold mb-1">Specific User ID (Optional)</label>
-                                <input type="text" value={userId} onChange={e => setUserId(e.target.value)} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" placeholder="Leave blank for public voucher" />
+                                <label className="block text-sm font-bold mb-1">Specific User Email (Optional)</label>
+                                <input type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" placeholder="Leave blank for public voucher" />
                             </div>
                             <button disabled={creating} type="submit" className="w-full bg-primary text-background-dark font-bold rounded-lg py-3 hover:bg-primary/90 disabled:opacity-50 mt-4">
                                 {creating ? 'Creating...' : 'Create Voucher'}

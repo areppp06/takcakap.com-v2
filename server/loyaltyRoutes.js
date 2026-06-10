@@ -171,9 +171,18 @@ module.exports = (requireAuth, requireAdmin) => {
     });
 
     router.post('/admin/vouchers', requireAdmin, async (req, res) => {
-        const { code, type, discount_value, min_spend, max_discount, expires_at, user_id } = req.body;
+        const { code, type, discount_value, min_spend, max_discount, expires_at, user_email } = req.body;
         
         try {
+            let finalUserId = null;
+            if (user_email && user_email.trim()) {
+                const [users] = await db.query('SELECT id FROM users WHERE email = ?', [user_email.trim()]);
+                if (users.length === 0) {
+                    return res.status(400).json({ error: 'User with this email not found' });
+                }
+                finalUserId = users[0].id;
+            }
+
             const sqlExpiresAt = expires_at ? new Date(expires_at).toISOString().slice(0, 19).replace('T', ' ') : null;
             await db.query(
                 `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, user_id, is_active, is_redeemed)
@@ -185,7 +194,7 @@ module.exports = (requireAuth, requireAdmin) => {
                     min_spend || 0,
                     max_discount || null,
                     sqlExpiresAt,
-                    user_id || null
+                    finalUserId
                 ]
             );
             res.json({ success: true });
