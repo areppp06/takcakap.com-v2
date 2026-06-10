@@ -18,7 +18,7 @@ export default function AdminPoints() {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_admin_token');
+            const token = localStorage.getItem('takcakap_auth_token');
             const res = await fetch('/api/admin/points/users', {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -37,7 +37,7 @@ export default function AdminPoints() {
         if (!selectedUser || !points || points <= 0) return;
         setAdjusting(true);
         try {
-            const token = localStorage.getItem('takcakap_admin_token');
+            const token = localStorage.getItem('takcakap_auth_token');
             const res = await fetch('/api/admin/points/adjust', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

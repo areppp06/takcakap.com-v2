@@ -23,7 +23,7 @@ export default function AdminVouchers() {
     const fetchVouchers = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_admin_token');
+            const token = localStorage.getItem('takcakap_auth_token');
             const res = await fetch('/api/admin/vouchers', {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -41,7 +41,7 @@ export default function AdminVouchers() {
         e.preventDefault();
         setCreating(true);
         try {
-            const token = localStorage.getItem('takcakap_admin_token');
+            const token = localStorage.getItem('takcakap_auth_token');
             const payload = {
                 code,
                 type,
@@ -75,7 +75,7 @@ export default function AdminVouchers() {
 
     const handleToggle = async (id: number) => {
         try {
-            const token = localStorage.getItem('takcakap_admin_token');
+            const token = localStorage.getItem('takcakap_auth_token');
             await fetch(`/api/admin/vouchers/${id}/toggle`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}` }
