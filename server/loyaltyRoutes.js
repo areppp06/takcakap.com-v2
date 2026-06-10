@@ -174,6 +174,7 @@ module.exports = (requireAuth, requireAdmin) => {
         const { code, type, discount_value, min_spend, max_discount, expires_at, user_id } = req.body;
         
         try {
+            const sqlExpiresAt = expires_at ? new Date(expires_at).toISOString().slice(0, 19).replace('T', ' ') : null;
             await db.query(
                 `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, user_id, is_active, is_redeemed)
                  VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, FALSE)`,
@@ -183,12 +184,13 @@ module.exports = (requireAuth, requireAdmin) => {
                     discount_value,
                     min_spend || 0,
                     max_discount || null,
-                    expires_at,
+                    sqlExpiresAt,
                     user_id || null
                 ]
             );
             res.json({ success: true });
         } catch (err) {
+            console.error('Voucher creation error:', err);
             if (err.code === 'ER_DUP_ENTRY') {
                 return res.status(400).json({ error: 'Voucher code already exists' });
             }
