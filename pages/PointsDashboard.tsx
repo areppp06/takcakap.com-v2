@@ -22,6 +22,7 @@ export default function PointsDashboard() {
     const [vouchersPage, setVouchersPage] = useState(1);
     const [historyPage, setHistoryPage] = useState(1);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [totalSaved, setTotalSaved] = useState<number>(0);
     
     const VOUCHERS_PER_PAGE = 4;
     const HISTORY_PER_PAGE = 10;
@@ -37,9 +38,10 @@ export default function PointsDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [pointsRes, vouchersRes] = await Promise.all([
+            const [pointsRes, vouchersRes, savingsRes] = await Promise.all([
                 fetch(`/api/user/points?page=1&limit=${HISTORY_PER_PAGE}`, { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } })
+                fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } }),
+                fetch('/api/user/vouchers/savings', { headers: { Authorization: `Bearer ${token}` } })
             ]);
             
             if (pointsRes.ok) {
@@ -47,6 +49,10 @@ export default function PointsDashboard() {
                 setHistoryPage(1);
             }
             if (vouchersRes.ok) setVouchers(await vouchersRes.json());
+            if (savingsRes.ok) {
+                const s = await savingsRes.json();
+                setTotalSaved(s.totalSaved || 0);
+            }
         } catch (err) {
             console.error(err);
         } finally {
@@ -126,11 +132,19 @@ export default function PointsDashboard() {
             <div className="flex flex-col lg:flex-row gap-8">
                 {/* Left Column: Banner, Redeem Cards, Vouchers */}
                 <div className="flex-1">
-                    {/* Banner */}
-                    <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl p-8 text-white shadow-md mb-6">
-                        <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">Total Points</p>
-                        <div className="text-4xl md:text-5xl font-extrabold">{balance.toLocaleString()} pts</div>
-                        <p className="text-sm font-medium mt-2 opacity-90">≈ RM {(balance / 200).toFixed(2)} (RM1 = 200 pts)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        {/* Banner */}
+                        <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl p-6 text-white shadow-md flex flex-col justify-center">
+                            <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">Total Points</p>
+                            <div className="text-3xl md:text-4xl font-extrabold">{balance.toLocaleString()} pts</div>
+                            <p className="text-sm font-medium mt-1 opacity-90">≈ RM {(balance / 200).toFixed(2)} (RM1 = 200 pts)</p>
+                        </div>
+                        {/* Savings Banner */}
+                        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-6 text-white shadow-md flex flex-col justify-center">
+                            <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">Lifetime Savings</p>
+                            <div className="text-3xl md:text-4xl font-extrabold">RM {totalSaved.toFixed(2)}</div>
+                            <p className="text-sm font-medium mt-1 opacity-90">Total amount saved from vouchers</p>
+                        </div>
                     </div>
                     
                     {/* Redeem Cards */}

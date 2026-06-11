@@ -42,6 +42,8 @@ export interface Order {
   date: string;
   status: OrderStatus;
   total: number;
+  voucherCode?: string | null;
+  voucherDiscount?: number;
   itemsSummary: string;
   orderType: 'Pickup' | 'Delivery';
   address?: string; // Optional because Pickup has no address

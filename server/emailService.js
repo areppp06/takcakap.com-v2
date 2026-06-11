@@ -182,9 +182,12 @@ const loadOrderEmailModel = async (orderId) => {
                 o.refund_status,
                 o.refund_amount,
                 u.name AS customer_name,
-                u.email AS customer_email
+                u.email AS customer_email,
+                v.code AS voucher_code,
+                o.discount_amount AS voucher_discount
             FROM orders o
             LEFT JOIN users u ON u.id = o.user_id
+            LEFT JOIN vouchers v ON o.voucher_id = v.id
             WHERE o.id = ?
             LIMIT 1
         `,
@@ -409,6 +412,7 @@ const buildEmailContent = ({ eventType, order, eventConfig }) => {
                     <td style="padding:6px 0; font-size:13px; color:#111827; text-align:right;">${formatMoneyMYR(order.serviceFee)}</td>
                   </tr>
                   ${order.order_type === 'Delivery' ? `<tr><td style="padding:6px 0; font-size:13px; color:#6b7280;">Delivery Fee</td><td style="padding:6px 0; font-size:13px; color:#111827; text-align:right;">${formatMoneyMYR(order.deliveryFee)}</td></tr>` : ''}
+                  ${order.voucher_code && Number(order.voucher_discount) > 0 ? `<tr><td style="padding:6px 0; font-size:13px; color:#6b7280;">Voucher (${escapeHtml(order.voucher_code)})</td><td style="padding:6px 0; font-size:13px; color:#059669; text-align:right;">-${formatMoneyMYR(Number(order.voucher_discount))}</td></tr>` : ''}
                   <tr>
                     <td style="padding:10px 0 0; border-top:1px solid #ececec; font-size:14px; font-weight:700; color:#111827;">Grand Total</td>
                     <td style="padding:10px 0 0; border-top:1px solid #ececec; font-size:16px; font-weight:800; color:${escapeHtml(eventConfig.accent)}; text-align:right;">${formatMoneyMYR(order.total)}</td>

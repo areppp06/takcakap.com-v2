@@ -271,6 +271,12 @@ const OrderHistory: React.FC = () => {
                                              <span>{formatCurrency(deliveryFee)}</span>
                                          </div>
                                      )}
+                                     {order.voucherCode && (order.voucherDiscount ?? 0) > 0 && (
+                                         <div className="flex justify-between text-xs">
+                                             <span className="text-gray-500">Voucher ({order.voucherCode})</span>
+                                             <span className="text-emerald-600 font-medium">-{formatCurrency(order.voucherDiscount!)}</span>
+                                         </div>
+                                     )}
                                  </div>
                              </div>
                              

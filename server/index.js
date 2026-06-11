@@ -5527,6 +5527,8 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                 SELECT 
                     o.id,
                     o.short_code,
+                    v.code as voucher_code,
+                    o.discount_amount as voucher_discount,
                     o.status,
                     o.total_amount,
                     o.created_at,
@@ -5568,6 +5570,7 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                     u.phone_number AS account_phone
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
+                LEFT JOIN vouchers v ON o.voucher_id = v.id
                 ${whereClause}
                 ORDER BY o.created_at DESC, o.id DESC
                 ${shouldPaginateMine ? 'LIMIT ?' : ''}
@@ -5646,6 +5649,8 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                 date: new Date(o.created_at).toLocaleString(),
                 status: o.status,
                 total: parseFloat(o.total_amount),
+                voucherCode: o.voucher_code || null,
+                voucherDiscount: parseFloat(o.voucher_discount || 0),
                 itemsSummary: o.itemsSummary,
                 orderType: o.order_type,
                 address: o.delivery_address,
@@ -6819,9 +6824,12 @@ app.get('/api/orders/:id/receipt', requireAuth, async (req, res) => {
                     o.payment_method,
                     u.name AS customer_name,
                     u.email AS customer_email,
-                    u.phone_number AS customer_phone
+                    u.phone_number AS customer_phone,
+                    v.code AS voucher_code,
+                    o.discount_amount AS voucher_discount
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN vouchers v ON o.voucher_id = v.id
                 WHERE o.id = ?
                 LIMIT 1
             `,
@@ -6986,7 +6994,10 @@ app.get('/api/orders/:id/receipt', requireAuth, async (req, res) => {
         }
 
         // Totals block
-        const totalBlockHeight = order.order_type === 'Delivery' ? 74 : 58;
+        const hasVoucher = order.voucher_code && Number(order.voucher_discount) > 0;
+        let totalBlockHeight = order.order_type === 'Delivery' ? 74 : 58;
+        if (hasVoucher) totalBlockHeight += 14;
+
         doc.roundedRect(left + contentWidth - 190, y, 190, totalBlockHeight, 10).fill('#f7f7f7');
         let ty = y + 10;
         doc.fillColor('#666666').font('Helvetica').fontSize(9);
@@ -6999,6 +7010,12 @@ app.get('/api/orders/:id/receipt', requireAuth, async (req, res) => {
         if (order.order_type === 'Delivery') {
             doc.text('Delivery Fee', left + contentWidth - 178, ty);
             doc.text(formatMoneyMYR(deliveryFee), left + contentWidth - 92, ty, { width: 82, align: 'right' });
+            ty += 14;
+        }
+        if (hasVoucher) {
+            doc.text(`Voucher (${order.voucher_code})`, left + contentWidth - 178, ty);
+            doc.fillColor('#059669').text(`-${formatMoneyMYR(Number(order.voucher_discount))}`, left + contentWidth - 92, ty, { width: 82, align: 'right' });
+            doc.fillColor('#666666'); // Reset color
             ty += 14;
         }
         doc.font('Helvetica-Bold').fillColor('#111111');

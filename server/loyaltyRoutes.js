@@ -151,6 +151,21 @@ module.exports = (requireAuth, requireAdmin) => {
         }
     });
 
+    router.get('/user/vouchers/savings', requireAuth, async (req, res) => {
+        try {
+            const [rows] = await db.query(
+                `SELECT SUM(discount_amount) as total_saved 
+                 FROM orders 
+                 WHERE user_id = ? AND status = 'Completed' AND discount_amount > 0`,
+                [req.user.id]
+            );
+            res.json({ totalSaved: Number(rows[0].total_saved || 0) });
+        } catch (err) {
+            console.error('Failed to fetch voucher savings:', err);
+            res.status(500).json({ error: 'Failed to fetch savings' });
+        }
+    });
+
     // ==========================================
     // ADMIN APIs
     // ==========================================
