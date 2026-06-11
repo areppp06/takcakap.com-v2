@@ -9,7 +9,7 @@ async function awardPointsForOrder(orderId) {
 
         // Get order details
         const [orders] = await connection.query(
-            `SELECT id, user_id, total_amount, status FROM orders WHERE id = ? FOR UPDATE`,
+            `SELECT id, user_id, total_amount, status, short_code FROM orders WHERE id = ? FOR UPDATE`,
             [orderId]
         );
         const order = orders[0];
@@ -33,11 +33,12 @@ async function awardPointsForOrder(orderId) {
         const pointsToAward = Math.floor(Number(order.total_amount)) * POINTS_PER_RM;
 
         if (pointsToAward > 0) {
+            const displayId = order.short_code || `fd-${orderId}`;
             // Insert transaction
             await connection.query(
                 `INSERT INTO points_transactions (user_id, points, transaction_type, reference_id, description)
                  VALUES (?, ?, 'earned', ?, ?)`,
-                [order.user_id, pointsToAward, orderId, `Points earned for order fd-${orderId}`]
+                [order.user_id, pointsToAward, orderId, `Points earned for order ${displayId}`]
             );
 
             // Update user balance
