@@ -23,6 +23,26 @@ const formatTimeLabel = (hhmm?: string) => {
   return `${hour12}:${m} ${ampm}`;
 };
 
+const getBannerText = (order: Order) => {
+  const code = order.shortCode || order.id.slice(-3).toUpperCase();
+  switch (order.status) {
+    case 'Preparing':
+    case 'Waiting Kitchen':
+      return `Kitchen is prepping your order #${code}`;
+    case 'Ready to Pickup':
+      return `Your Order #${code} is ready to pickup`;
+    case 'Finding Rider':
+    case 'Rider Picked Up':
+    case 'Rider OTW':
+    case 'Out For Delivery':
+      return `Your Order #${code} is on the way!`;
+    case 'Pending Payment':
+      return `Order #${code} is awaiting payment`;
+    default:
+      return `Active Order #${code}: ${order.status}`;
+  }
+};
+
 type NoticeType = 'success' | 'error';
 
 const Home: React.FC = () => {
@@ -434,7 +454,7 @@ const Home: React.FC = () => {
                 </span>
               </div>
               <div>
-                <p className="font-extrabold text-sm">{activeOrder.status}</p>
+                <p className="font-extrabold text-sm">{getBannerText(activeOrder)}</p>
                 <p className="text-xs font-semibold opacity-90">Tap to track your order</p>
               </div>
             </div>
