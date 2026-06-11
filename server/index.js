@@ -6028,7 +6028,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
         if (voucherCode) {
             const normalizedCode = String(voucherCode).trim().toUpperCase();
             const [voucherRows] = await connection.query(
-                `SELECT id, type, discount_value, min_spend, max_discount, expires_at, is_active, is_redeemed, user_id
+                `SELECT id, type, discount_value, min_spend, max_discount, expires_at, is_active, is_redeemed, max_uses, times_used, user_id
                  FROM vouchers WHERE code = ? FOR UPDATE`,
                 [normalizedCode]
             );
@@ -6037,8 +6037,8 @@ app.post('/api/orders', requireAuth, async (req, res) => {
             if (!voucher) {
                 const err = new Error('Invalid voucher code'); err.status = 400; throw err;
             }
-            if (!voucher.is_active || voucher.is_redeemed) {
-                const err = new Error('Voucher is no longer valid or has already been used'); err.status = 400; throw err;
+            if (!voucher.is_active || voucher.times_used >= voucher.max_uses) {
+                const err = new Error('Voucher is no longer valid or has reached its usage limit'); err.status = 400; throw err;
             }
             if (new Date(voucher.expires_at) < new Date()) {
                 const err = new Error('Voucher has expired'); err.status = 400; throw err;
@@ -6320,7 +6320,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
 
         if (appliedVoucherId) {
             await connection.query(
-                `UPDATE vouchers SET is_redeemed = TRUE WHERE id = ?`,
+                `UPDATE vouchers SET times_used = times_used + 1, is_redeemed = IF(times_used + 1 >= max_uses, TRUE, FALSE) WHERE id = ?`,
                 [appliedVoucherId]
             );
         }

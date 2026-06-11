@@ -5,7 +5,6 @@ import BrandLogo from '../components/BrandLogo';
 import AdminMobileNav from '../components/AdminMobileNav';
 import AdminSidebarNav from '../components/AdminSidebarNav';
 import AdminSidebarFooter from '../components/AdminSidebarFooter';
-import { api } from '../services/api';
 import { formatCurrency } from '../utils/currency';
 
 export default function AdminVouchers() {
@@ -20,6 +19,12 @@ export default function AdminVouchers() {
     const [statsLoading, setStatsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
 
+    // New Features
+    const [activeTab, setActiveTab] = useState<'manual' | 'points_redemption'>('manual');
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [voucherToDelete, setVoucherToDelete] = useState<any>(null);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
     // Form State
     const [code, setCode] = useState('');
     const [type, setType] = useState<'fixed' | 'percentage'>('fixed');
@@ -28,6 +33,7 @@ export default function AdminVouchers() {
     const [maxDiscount, setMaxDiscount] = useState<number | ''>('');
     const [expiresAt, setExpiresAt] = useState('');
     const [userEmail, setUserEmail] = useState('');
+    const [maxUses, setMaxUses] = useState<number | ''>(1);
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -40,7 +46,7 @@ export default function AdminVouchers() {
 
     useEffect(() => {
         fetchVouchers(page);
-    }, [page]);
+    }, [page, activeTab]);
 
     useEffect(() => {
         fetchStats();
@@ -67,7 +73,7 @@ export default function AdminVouchers() {
         setLoading(true);
         try {
             const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch(`/api/admin/vouchers?page=${p}&limit=${PAGE_SIZE}`, {
+            const res = await fetch(`/api/admin/vouchers?page=${p}&limit=${PAGE_SIZE}&source=${activeTab}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
@@ -121,7 +127,8 @@ export default function AdminVouchers() {
                 min_spend: minSpend ? Number(minSpend) : 0,
                 max_discount: maxDiscount ? Number(maxDiscount) : null,
                 expires_at: new Date(expiresAt).toISOString(),
-                user_email: userEmail || null
+                user_email: userEmail || null,
+                max_uses: userEmail ? 1 : Number(maxUses)
             };
             const res = await fetch('/api/admin/vouchers', {
                 method: 'POST',
@@ -137,7 +144,12 @@ export default function AdminVouchers() {
             setMaxDiscount('');
             setExpiresAt('');
             setUserEmail('');
-            fetchVouchers();
+            setMaxUses(1);
+            if (activeTab === 'manual') {
+                fetchVouchers(1);
+            } else {
+                setActiveTab('manual');
+            }
         } catch (err: any) {
             alert(err.message);
         } finally {
@@ -152,7 +164,29 @@ export default function AdminVouchers() {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchVouchers();
+            fetchVouchers(page);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const confirmDelete = (v: any) => {
+        setVoucherToDelete(v);
+        setDeleteConfirmText('');
+        setDeleteModalOpen(true);
+    };
+
+    const handleDelete = async () => {
+        if (deleteConfirmText !== 'DELETE' || !voucherToDelete) return;
+        try {
+            const token = localStorage.getItem('takcakap_auth_token');
+            await fetch(`/api/admin/vouchers/${voucherToDelete.id}/delete`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setDeleteModalOpen(false);
+            setVoucherToDelete(null);
+            fetchVouchers(page);
         } catch (err) {
             console.error(err);
         }
@@ -175,7 +209,7 @@ export default function AdminVouchers() {
             </aside>
 
             {/* Main Content */}
-            <main className="lg:ml-64 flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pb-24 lg:pb-8">
+            <main className="lg:ml-64 flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pb-24 lg:pb-8 relative">
                 <AdminMobileNav currentPath={location.pathname} onLogout={handleLogout} />
                 
                 <header className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -230,88 +264,123 @@ export default function AdminVouchers() {
                 </section>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-                        <div className="px-6 py-4 border-b border-[#e7f4e7] dark:border-white/10 font-bold">All Vouchers</div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-[#f8fcf8] dark:bg-white/5 text-xs font-bold uppercase tracking-wider text-[#499c49]">
-                                    <tr>
-                                        <th className="px-6 py-4">Code</th>
-                                        <th className="px-6 py-4">Value</th>
-                                        <th className="px-6 py-4">Min Spend</th>
-                                        <th className="px-6 py-4">Expires</th>
-                                        <th className="px-6 py-4 text-center">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
-                                    {loading ? (
-                                        <tr><td colSpan={5} className="p-6 text-center text-gray-500">Loading...</td></tr>
-                                    ) : (
-                                        vouchers.map(v => (
-                                        <tr key={v.id} className={v.is_redeemed ? 'opacity-50' : ''}>
-                                            <td className="px-6 py-4">
-                                                <div className="font-bold tracking-wide">{v.code}</div>
-                                                {v.user_name && <div className="text-xs text-gray-500">For: {v.user_name}</div>}
-                                            </td>
-                                            <td className="px-6 py-4 font-bold text-primary">
-                                                {v.type === 'fixed' ? formatCurrency(v.discount_value) : `${v.discount_value}%`}
-                                                {v.max_discount && <div className="text-xs text-gray-500">Max: {formatCurrency(v.max_discount)}</div>}
-                                            </td>
-                                            <td className="px-6 py-4">{formatCurrency(v.min_spend)}</td>
-                                            <td className="px-6 py-4 text-sm">{new Date(v.expires_at).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 text-center">
-                                                {v.is_redeemed ? (
-                                                    <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs font-bold">Redeemed</span>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        title={v.is_active ? "Click to Deactivate" : "Click to Activate"}
-                                                        onClick={() => handleToggle(v.id)}
-                                                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-                                                            v.is_active ? 'bg-primary' : 'bg-gray-200 dark:bg-slate-700'
-                                                        }`}
-                                                    >
-                                                        <span className="sr-only">Toggle voucher status</span>
-                                                        <span
-                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                                v.is_active ? 'translate-x-5' : 'translate-x-0'
-                                                            }`}
-                                                        />
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                    <div className="lg:col-span-2 space-y-4">
+                        {/* Tabs */}
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => { setActiveTab('manual'); setPage(1); }} 
+                                className={`px-6 py-3 font-bold rounded-t-xl transition-colors ${activeTab === 'manual' ? 'bg-white dark:bg-white/5 text-primary border-t border-l border-r border-[#e7f4e7] dark:border-white/10' : 'bg-gray-100 dark:bg-white/5 text-gray-500 hover:bg-gray-200 dark:hover:bg-white/10 border-t border-l border-r border-transparent'}`}
+                            >
+                                Manual Generated
+                            </button>
+                            <button 
+                                onClick={() => { setActiveTab('points_redemption'); setPage(1); }} 
+                                className={`px-6 py-3 font-bold rounded-t-xl transition-colors ${activeTab === 'points_redemption' ? 'bg-white dark:bg-white/5 text-primary border-t border-l border-r border-[#e7f4e7] dark:border-white/10' : 'bg-gray-100 dark:bg-white/5 text-gray-500 hover:bg-gray-200 dark:hover:bg-white/10 border-t border-l border-r border-transparent'}`}
+                            >
+                                Auto Generated
+                            </button>
                         </div>
-                        {!loading && vouchers.length > 0 && (
-                            <div className="px-6 py-4 border-t border-[#e7f4e7] dark:border-white/10 flex justify-between items-center bg-gray-50 dark:bg-white/5">
-                                <button
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
-                                >
-                                    Previous
-                                </button>
-                                <span className="text-sm font-semibold">
-                                    Page {page} of {Math.max(1, Math.ceil(vouchers.length / PAGE_SIZE))}
-                                </span>
-                                <button
-                                    onClick={() => setPage(p => Math.min(Math.ceil(vouchers.length / PAGE_SIZE), p + 1))}
-                                    disabled={page === Math.max(1, Math.ceil(vouchers.length / PAGE_SIZE))}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
+
+                        <div className="bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-b-xl rounded-tr-xl overflow-hidden shadow-sm">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-[#f8fcf8] dark:bg-white/5 text-xs font-bold uppercase tracking-wider text-[#499c49]">
+                                        <tr>
+                                            <th className="px-6 py-4">Code</th>
+                                            <th className="px-6 py-4">Value</th>
+                                            <th className="px-6 py-4">Limits</th>
+                                            <th className="px-6 py-4">Expires</th>
+                                            <th className="px-6 py-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
+                                        {loading ? (
+                                            <tr><td colSpan={5} className="p-6 text-center text-gray-500">Loading...</td></tr>
+                                        ) : vouchers.length === 0 ? (
+                                            <tr><td colSpan={5} className="p-12 text-center text-gray-400">No {activeTab === 'manual' ? 'manual' : 'auto generated'} vouchers found</td></tr>
+                                        ) : (
+                                            vouchers.map(v => {
+                                                const isExhausted = v.times_used >= v.max_uses;
+                                                return (
+                                                    <tr key={v.id} className={isExhausted ? 'opacity-50' : ''}>
+                                                        <td className="px-6 py-4">
+                                                            <div className="font-bold tracking-wide">{v.code}</div>
+                                                            {v.user_name && <div className="text-xs text-gray-500">For: {v.user_name}</div>}
+                                                        </td>
+                                                        <td className="px-6 py-4 font-bold text-primary">
+                                                            {v.type === 'fixed' ? formatCurrency(v.discount_value) : `${v.discount_value}%`}
+                                                            {v.max_discount && <div className="text-xs text-gray-500">Max: {formatCurrency(v.max_discount)}</div>}
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="text-sm">Min: {formatCurrency(v.min_spend)}</div>
+                                                            <div className="text-xs font-bold mt-1 text-orange-600 dark:text-orange-400">
+                                                                Uses: {v.times_used} / {v.max_uses}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm">{new Date(v.expires_at).toLocaleDateString()}</td>
+                                                        <td className="px-6 py-4 text-center flex items-center justify-center gap-3">
+                                                            {activeTab === 'manual' && !isExhausted && (
+                                                                <button
+                                                                    type="button"
+                                                                    title={v.is_active ? "Click to Deactivate" : "Click to Activate"}
+                                                                    onClick={() => handleToggle(v.id)}
+                                                                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                                                        v.is_active ? 'bg-primary' : 'bg-gray-200 dark:bg-slate-700'
+                                                                    }`}
+                                                                >
+                                                                    <span className="sr-only">Toggle voucher status</span>
+                                                                    <span
+                                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                                            v.is_active ? 'translate-x-5' : 'translate-x-0'
+                                                                        }`}
+                                                                    />
+                                                                </button>
+                                                            )}
+                                                            {isExhausted && activeTab === 'manual' && (
+                                                                <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs font-bold">Exhausted</span>
+                                                            )}
+                                                            <button 
+                                                                onClick={() => confirmDelete(v)}
+                                                                className="text-red-500 hover:text-red-700 p-1 bg-red-50 dark:bg-red-900/20 rounded-lg"
+                                                                title="Delete Voucher"
+                                                            >
+                                                                <span className="material-symbols-outlined text-xl">delete</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
-                        )}
+                            {!loading && vouchers.length > 0 && (
+                                <div className="px-6 py-4 border-t border-[#e7f4e7] dark:border-white/10 flex justify-between items-center bg-gray-50 dark:bg-white/5">
+                                    <button
+                                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                                        disabled={page === 1}
+                                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                                    >
+                                        Previous
+                                    </button>
+                                    <span className="text-sm font-semibold">
+                                        Page {page} of {Math.max(1, totalPages)}
+                                    </span>
+                                    <button
+                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={page === Math.max(1, totalPages)}
+                                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div>
                         <div className="bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-xl p-6 shadow-sm sticky top-24">
-                            <h2 className="text-xl font-bold mb-4">Create Voucher</h2>
+                            <h2 className="text-xl font-bold mb-4">Create Manual Voucher</h2>
                             <form onSubmit={handleCreate} className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-bold mb-1">Voucher Code</label>
@@ -339,20 +408,67 @@ export default function AdminVouchers() {
                                     <input type="number" step="0.01" min="0" value={minSpend} onChange={e => setMinSpend(Number(e.target.value))} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" placeholder="e.g. 30" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">Expiry Date</label>
-                                    <input required type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" />
-                                </div>
-                                <div>
                                     <label className="block text-sm font-bold mb-1">Specific User Email (Optional)</label>
                                     <input type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" placeholder="Leave blank for public voucher" />
                                 </div>
-                                <button disabled={creating} type="submit" className="w-full bg-primary text-background-dark font-bold rounded-lg py-3 hover:bg-primary/90 disabled:opacity-50 mt-4">
+                                {!userEmail && (
+                                    <div>
+                                        <label className="block text-sm font-bold mb-1">Max Uses (Total)</label>
+                                        <input type="number" min="1" value={maxUses} onChange={e => setMaxUses(Number(e.target.value))} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" placeholder="e.g. 100" />
+                                        <p className="text-xs text-gray-500 mt-1">How many times this voucher can be used globally.</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-sm font-bold mb-1">Expiry Date</label>
+                                    <input required type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" />
+                                </div>
+                                <button disabled={creating} type="submit" className="w-full bg-primary text-white font-bold rounded-lg py-3 hover:bg-primary/90 disabled:opacity-50 mt-4">
                                     {creating ? 'Creating...' : 'Create Voucher'}
                                 </button>
                             </form>
                         </div>
                     </div>
                 </div>
+
+                {/* Delete Confirmation Modal */}
+                {deleteModalOpen && voucherToDelete && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+                            <h3 className="text-xl font-bold text-red-600 mb-2 flex items-center gap-2">
+                                <span className="material-symbols-outlined">warning</span>
+                                Delete Voucher
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-300 mb-4 leading-tight">
+                                Are you sure you want to delete the voucher <strong className="text-black dark:text-white">{voucherToDelete.code}</strong> 
+                                {voucherToDelete.user_name ? ` for User ${voucherToDelete.user_name}` : ''}? This action cannot be undone and will completely hide it.
+                            </p>
+                            <p className="text-sm font-bold mb-2">Write "DELETE" to confirm:</p>
+                            <input 
+                                type="text"
+                                value={deleteConfirmText}
+                                onChange={e => setDeleteConfirmText(e.target.value)}
+                                className="w-full bg-white dark:bg-zinc-900 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 mb-6 focus:ring-2 focus:ring-red-500 outline-none"
+                                placeholder="DELETE"
+                            />
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => { setDeleteModalOpen(false); setVoucherToDelete(null); }}
+                                    className="flex-1 px-4 py-2 rounded-lg font-bold border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleDelete}
+                                    disabled={deleteConfirmText !== 'DELETE'}
+                                    className="flex-1 px-4 py-2 rounded-lg font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Confirm Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

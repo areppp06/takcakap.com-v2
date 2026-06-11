@@ -90,8 +90,12 @@ async function redeemVoucher(userId, pointsToRedeem, voucherConfig) {
             throw new Error('Insufficient points balance');
         }
 
-        // Generate unique code
-        const code = `VOUCHER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        // Generate unique 6-character code
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
         
         // Expiry 30 days
         const expiresAt = new Date();
@@ -99,8 +103,8 @@ async function redeemVoucher(userId, pointsToRedeem, voucherConfig) {
 
         // Insert Voucher
         const [voucherResult] = await connection.query(
-            `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, is_active, user_id, is_redeemed)
-             VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, FALSE)`,
+            `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, is_active, user_id, is_redeemed, max_uses, times_used, source)
+             VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, FALSE, 1, 0, 'points_redemption')`,
             [
                 code, 
                 voucherConfig.type, 

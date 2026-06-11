@@ -5,6 +5,37 @@ const loyaltyService = require('./loyaltyService');
 const emailService = require('./emailService');
 
 module.exports = (requireAuth, requireAdmin) => {
+    // In-memory rate limiter for voucher validation
+    const failedVoucherAttempts = new Map();
+
+    function checkRateLimit(ip) {
+        const now = Date.now();
+        const windowMs = 15 * 60 * 1000; // 15 mins
+        const maxAttempts = 5;
+
+        let record = failedVoucherAttempts.get(ip);
+        if (!record) {
+            record = { count: 0, resetTime: now + windowMs };
+            failedVoucherAttempts.set(ip, record);
+        }
+
+        if (now > record.resetTime) {
+            record.count = 0;
+            record.resetTime = now + windowMs;
+        }
+
+        if (record.count >= maxAttempts) {
+            return false;
+        }
+        return true;
+    }
+
+    function recordFailedAttempt(ip) {
+        const record = failedVoucherAttempts.get(ip);
+        if (record) {
+            record.count++;
+        }
+    }
 
     // ==========================================
     // USER APIs
@@ -25,9 +56,9 @@ module.exports = (requireAuth, requireAdmin) => {
     router.get('/user/vouchers', requireAuth, async (req, res) => {
         try {
             const { activeOnly } = req.query;
-            let query = `SELECT * FROM vouchers WHERE user_id = ?`;
+            let query = `SELECT * FROM vouchers WHERE user_id = ? AND is_archived = FALSE`;
             if (activeOnly === 'true') {
-                query += ` AND is_active = TRUE AND is_redeemed = FALSE AND (expires_at IS NULL OR expires_at > NOW())`;
+                query += ` AND is_active = TRUE AND times_used < max_uses AND (expires_at IS NULL OR expires_at > NOW())`;
             }
             query += ` ORDER BY created_at DESC LIMIT 200`;
             
@@ -77,25 +108,43 @@ module.exports = (requireAuth, requireAdmin) => {
     });
 
     router.post('/user/vouchers/validate', requireAuth, async (req, res) => {
+        const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        if (!checkRateLimit(clientIp)) {
+            return res.status(429).json({ error: 'Too many invalid attempts. Please try again in 15 minutes.' });
+        }
+
         const { code, subtotal } = req.body;
         const normalizedCode = String(code || '').trim().toUpperCase();
         
         try {
             const [voucherRows] = await db.query(
-                `SELECT * FROM vouchers WHERE code = ?`,
+                `SELECT * FROM vouchers WHERE code = ? AND is_archived = FALSE`,
                 [normalizedCode]
             );
             const voucher = voucherRows[0];
             
-            if (!voucher) return res.status(404).json({ error: 'Invalid voucher code' });
-            if (!voucher.is_active || voucher.is_redeemed) return res.status(400).json({ error: 'Voucher is no longer valid or has been used' });
-            if (new Date(voucher.expires_at) < new Date()) return res.status(400).json({ error: 'Voucher has expired' });
-            if (voucher.user_id && voucher.user_id !== req.user.id) return res.status(400).json({ error: 'Voucher belongs to another account' });
+            if (!voucher) {
+                recordFailedAttempt(clientIp);
+                return res.status(404).json({ error: 'Invalid voucher code' });
+            }
+            if (!voucher.is_active || voucher.times_used >= voucher.max_uses) {
+                recordFailedAttempt(clientIp);
+                return res.status(400).json({ error: 'Voucher is no longer valid or has reached its usage limit' });
+            }
+            if (new Date(voucher.expires_at) < new Date()) {
+                return res.status(400).json({ error: 'Voucher has expired' });
+            }
+            if (voucher.user_id && voucher.user_id !== req.user.id) {
+                recordFailedAttempt(clientIp);
+                return res.status(400).json({ error: 'Voucher belongs to another account' });
+            }
             
             if (subtotal && subtotal < Number(voucher.min_spend)) {
                 return res.status(400).json({ error: `Minimum spend of RM${voucher.min_spend} required` });
             }
 
+            // Valid code, clear their failed attempts
+            failedVoucherAttempts.delete(clientIp);
             res.json({ valid: true, voucher });
         } catch (err) {
             res.status(500).json({ error: 'Failed to validate voucher' });
@@ -176,16 +225,18 @@ module.exports = (requireAuth, requireAdmin) => {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const offset = (page - 1) * limit;
+            const source = req.query.source || 'manual'; // 'manual' or 'points_redemption'
 
             const [vouchers] = await db.query(`
                 SELECT v.*, u.name as user_name, u.email as user_email
                 FROM vouchers v
                 LEFT JOIN users u ON v.user_id = u.id
+                WHERE v.is_archived = FALSE AND v.source = ?
                 ORDER BY v.created_at DESC
                 LIMIT ? OFFSET ?
-            `, [limit, offset]);
+            `, [source, limit, offset]);
             
-            const [countResult] = await db.query(`SELECT COUNT(*) as total FROM vouchers`);
+            const [countResult] = await db.query(`SELECT COUNT(*) as total FROM vouchers WHERE is_archived = FALSE AND source = ?`, [source]);
             const total = countResult[0].total;
 
             res.json({ vouchers, total, totalPages: Math.ceil(total / limit) });
@@ -195,22 +246,25 @@ module.exports = (requireAuth, requireAdmin) => {
     });
 
     router.post('/admin/vouchers', requireAdmin, async (req, res) => {
-        const { code, type, discount_value, min_spend, max_discount, expires_at, user_email } = req.body;
+        const { code, type, discount_value, min_spend, max_discount, expires_at, user_email, max_uses } = req.body;
         
         try {
             let finalUserId = null;
+            let finalMaxUses = parseInt(max_uses) || 1;
+
             if (user_email && user_email.trim()) {
                 const [users] = await db.query('SELECT id FROM users WHERE email = ?', [user_email.trim()]);
                 if (users.length === 0) {
                     return res.status(400).json({ error: 'User with this email not found' });
                 }
                 finalUserId = users[0].id;
+                finalMaxUses = 1; // Force 1 if assigned to specific user
             }
 
             const sqlExpiresAt = expires_at ? new Date(expires_at).toISOString().slice(0, 19).replace('T', ' ') : null;
             await db.query(
-                `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, user_id, is_active, is_redeemed)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, FALSE)`,
+                `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, user_id, is_active, is_redeemed, max_uses, times_used, source, is_archived)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, FALSE, ?, 0, 'manual', FALSE)`,
                 [
                     code.trim().toUpperCase(),
                     type,
@@ -218,7 +272,8 @@ module.exports = (requireAuth, requireAdmin) => {
                     min_spend || 0,
                     max_discount || null,
                     sqlExpiresAt,
-                    finalUserId
+                    finalUserId,
+                    finalMaxUses
                 ]
             );
             res.json({ success: true });
@@ -237,6 +292,15 @@ module.exports = (requireAuth, requireAdmin) => {
             res.json({ success: true });
         } catch (err) {
             res.status(500).json({ error: 'Failed to toggle voucher' });
+        }
+    });
+
+    router.put('/admin/vouchers/:id/delete', requireAdmin, async (req, res) => {
+        try {
+            await db.query(`UPDATE vouchers SET is_archived = TRUE WHERE id = ?`, [req.params.id]);
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: 'Failed to delete voucher' });
         }
     });
 
