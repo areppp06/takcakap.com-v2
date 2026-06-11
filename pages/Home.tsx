@@ -447,11 +447,14 @@ const Home: React.FC = () => {
             className="flex items-center justify-between bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)] border border-zinc-100 dark:border-zinc-800"
           >
             <div className="flex items-center gap-4">
-              <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined font-bold text-primary text-[24px]">
-                  {activeOrder.status === 'Rider OTW' || activeOrder.status === 'Out For Delivery' ? 'directions_bike' : 
-                   activeOrder.status === 'Ready to Pickup' ? 'shopping_bag' : 'soup_kitchen'}
-                </span>
+              <div className="relative shrink-0 flex items-center justify-center w-12 h-12">
+                <div className="absolute inset-0 bg-primary/30 rounded-full animate-ping opacity-75"></div>
+                <div className="relative bg-primary/10 w-full h-full rounded-full flex items-center justify-center z-10">
+                  <span className="material-symbols-outlined font-bold text-primary text-[24px]">
+                    {activeOrder.status === 'Rider OTW' || activeOrder.status === 'Out For Delivery' ? 'directions_bike' : 
+                     activeOrder.status === 'Ready to Pickup' ? 'shopping_bag' : 'soup_kitchen'}
+                  </span>
+                </div>
               </div>
               <div className="flex flex-col">
                 <p className="font-extrabold text-[15px] text-zinc-900 dark:text-white leading-tight mb-0.5">{getBannerText(activeOrder)}</p>
