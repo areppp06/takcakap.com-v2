@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 const tabs = [
-  { to: '/dashboard', label: 'Dashboard', icon: 'grid_view' },
+  { to: '/', label: 'Home', icon: 'home' },
   { to: '/rewards', label: 'Rewards', icon: 'stars' },
   { to: '/orders', label: 'Orders', icon: 'receipt_long' },
   { to: '/addresses', label: 'Addresses', icon: 'location_on' },
@@ -13,7 +13,10 @@ const UserMobileTabBar: React.FC = () => {
   const location = useLocation();
   const pathname = location.pathname;
 
-  const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  const isActive = (to: string) => {
+    if (to === '/') return pathname === '/';
+    return pathname === to || pathname.startsWith(`${to}/`);
+  };
 
   return (
     <nav className="lg:hidden fixed inset-x-0 bottom-0 z-[80] px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none">

@@ -9,6 +9,7 @@ import { MenuItem, ShopStatus } from '../types';
 import { formatCurrency } from '../utils/currency';
 import AppHeader, { HeaderAvatarLink, HeaderCartLink } from '../components/AppHeader';
 import BrandLogo from '../components/BrandLogo';
+import UserMobileTabBar from '../components/UserMobileTabBar';
 
 const formatTimeLabel = (hhmm?: string) => {
   if (!hhmm) return '';
@@ -408,6 +409,8 @@ const Home: React.FC = () => {
           </div>
         </div>
       </footer>
+      
+      <UserMobileTabBar />
     </div>
   );
 };
