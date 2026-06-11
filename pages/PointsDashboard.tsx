@@ -206,31 +206,33 @@ export default function PointsDashboard() {
                 </div>
 
                 {/* Right Column: Points History Sidebar */}
-                <div className="w-full lg:w-80">
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                        <h2 className="text-lg font-bold mb-6 text-gray-900">Points History</h2>
+                <div className="w-full lg:w-80 lg:sticky lg:top-24 self-start">
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col max-h-[600px] lg:max-h-[calc(100vh-160px)]">
+                        <h2 className="text-lg font-bold mb-4 text-gray-900 shrink-0">Points History</h2>
                         {transactions.length === 0 ? (
                             <p className="text-gray-500 text-sm">No recent transactions.</p>
                         ) : (
                             <>
-                                <div className="relative border-l border-gray-200 ml-2 space-y-6 mb-6">
-                                    {currentTransactions.map((tx) => {
-                                        const isPositive = tx.points > 0;
-                                        return (
-                                            <div key={tx.id} className="relative pl-6">
-                                                <div className={`absolute -left-[5px] top-[6px] w-[9px] h-[9px] rounded-full ring-4 ring-white ${isPositive ? 'bg-[#2ea65a]' : 'bg-[#e44949]'}`}></div>
-                                                <div className={`font-bold text-lg leading-none mb-1 ${isPositive ? 'text-[#2ea65a]' : 'text-[#e44949]'}`}>
-                                                    {isPositive ? '+' : ''}{tx.points.toLocaleString()}
+                                <div className="overflow-y-auto flex-1 no-scrollbar pr-1 pb-2">
+                                    <div className="relative border-l border-gray-200 ml-2 space-y-6">
+                                        {currentTransactions.map((tx) => {
+                                            const isPositive = tx.points > 0;
+                                            return (
+                                                <div key={tx.id} className="relative pl-6">
+                                                    <div className={`absolute -left-[5px] top-[6px] w-[9px] h-[9px] rounded-full ring-4 ring-white ${isPositive ? 'bg-[#2ea65a]' : 'bg-[#e44949]'}`}></div>
+                                                    <div className={`font-bold text-lg leading-none mb-1 ${isPositive ? 'text-[#2ea65a]' : 'text-[#e44949]'}`}>
+                                                        {isPositive ? '+' : ''}{tx.points.toLocaleString()}
+                                                    </div>
+                                                    <div className="text-sm font-semibold text-gray-800 leading-snug">{tx.description || tx.transaction_type}</div>
+                                                    <div className="text-xs text-gray-500 mt-1">({new Date(tx.created_at).toLocaleString('en-MY', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})</div>
                                                 </div>
-                                                <div className="text-sm font-semibold text-gray-800 leading-snug">{tx.description || tx.transaction_type}</div>
-                                                <div className="text-xs text-gray-500 mt-1">({new Date(tx.created_at).toLocaleString('en-MY', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})</div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                                 {hasMoreHistory && (
-                                    <div className="relative mt-2">
-                                        <div className="absolute inset-x-0 bottom-full h-12 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
+                                    <div className="pt-4 mt-2 border-t border-gray-100 shrink-0 relative">
+                                        <div className="absolute bottom-full mb-0 inset-x-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
                                         <button 
                                             onClick={() => setHistoryVisibleCount(v => v + HISTORY_PER_PAGE)}
                                             className="w-full py-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-sm transition-colors border border-gray-200"
