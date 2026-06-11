@@ -143,7 +143,41 @@ export default function PointsDashboard() {
         alert('Copied to clipboard!');
     };
 
-    if (loading) return <div className="p-8 text-center">Loading points data...</div>;
+    if (loading) {
+        return (
+            <UserDashboardLayout>
+                <div className="max-w-2xl mx-auto space-y-8 animate-pulse">
+                    {/* Balance Card Skeleton */}
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                        <div>
+                            <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-24 mb-3"></div>
+                            <div className="h-10 bg-zinc-200 dark:bg-zinc-800 rounded w-32"></div>
+                        </div>
+                        <div className="h-16 w-16 bg-zinc-200 dark:bg-zinc-800 rounded-full"></div>
+                    </div>
+                    
+                    {/* Active Vouchers Skeleton */}
+                    <div>
+                        <div className="h-6 bg-zinc-200 dark:bg-zinc-800 rounded w-40 mb-4"></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="h-28 bg-zinc-200 dark:bg-zinc-800 rounded-xl"></div>
+                            <div className="h-28 bg-zinc-200 dark:bg-zinc-800 rounded-xl"></div>
+                        </div>
+                    </div>
+
+                    {/* Redeem Points Skeleton */}
+                    <div>
+                        <div className="h-6 bg-zinc-200 dark:bg-zinc-800 rounded w-48 mb-4"></div>
+                        <div className="space-y-3">
+                            <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-xl"></div>
+                            <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-xl"></div>
+                            <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-xl"></div>
+                        </div>
+                    </div>
+                </div>
+            </UserDashboardLayout>
+        );
+    }
 
     const balance = pointsData?.balance || 0;
     
