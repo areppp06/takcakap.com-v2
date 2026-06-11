@@ -74,11 +74,13 @@ module.exports = (requireAuth, requireAdmin) => {
         const { points } = req.body;
         const pointsToRedeem = Number(points);
         
-        if (!pointsToRedeem || pointsToRedeem <= 0 || pointsToRedeem % 200 !== 0) {
-            return res.status(400).json({ error: 'Points must be a multiple of 200' });
+        let discountValue = 0;
+        if (pointsToRedeem === 200) discountValue = 1;
+        else if (pointsToRedeem === 800) discountValue = 5;
+        else if (pointsToRedeem === 1480) discountValue = 10;
+        else {
+            return res.status(400).json({ error: 'Invalid redemption amount. Please select a valid reward.' });
         }
-
-        const discountValue = pointsToRedeem / 200;
         
         const voucherConfig = {
             type: 'fixed',

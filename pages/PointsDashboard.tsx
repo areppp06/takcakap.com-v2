@@ -165,11 +165,11 @@ export default function PointsDashboard() {
                         <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
                             <div>
                                 <div className="font-extrabold text-lg mb-1 text-gray-900">RM5 Off</div>
-                                <div className="text-sm text-gray-600 mb-4">(Redeem 1,000 pts)</div>
+                                <div className="text-sm text-gray-600 mb-4">(Redeem 800 pts)</div>
                             </div>
                             <button 
-                                onClick={() => handleRedeemClick(1000)}
-                                disabled={balance < 1000 || redeeming}
+                                onClick={() => handleRedeemClick(800)}
+                                disabled={balance < 800 || redeeming}
                                 className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
                             >
                                 Redeem
@@ -178,11 +178,11 @@ export default function PointsDashboard() {
                         <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
                             <div>
                                 <div className="font-extrabold text-lg mb-1 text-gray-900">RM10 Off</div>
-                                <div className="text-sm text-gray-600 mb-4">(Redeem 2,000 pts)</div>
+                                <div className="text-sm text-gray-600 mb-4">(Redeem 1,480 pts)</div>
                             </div>
                             <button 
-                                onClick={() => handleRedeemClick(2000)}
-                                disabled={balance < 2000 || redeeming}
+                                onClick={() => handleRedeemClick(1480)}
+                                disabled={balance < 1480 || redeeming}
                                 className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
                             >
                                 Redeem
