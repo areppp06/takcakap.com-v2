@@ -23,6 +23,10 @@ export default function AdminPoints() {
     const [stats, setStats] = useState({ circulatingCoin: 0, estValueRM: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
 
+    const [cooldownHours, setCooldownHours] = useState(12);
+    const [confirmText, setConfirmText] = useState('');
+    const [savingCooldown, setSavingCooldown] = useState(false);
+
     const [tiers, setTiers] = useState<any[]>([]);
     const [tiersLoading, setTiersLoading] = useState(true);
     const [tierModalOpen, setTierModalOpen] = useState(false);
@@ -44,7 +48,23 @@ export default function AdminPoints() {
     useEffect(() => {
         fetchStats();
         fetchTiers();
+        fetchCooldown();
     }, []);
+
+    const fetchCooldown = async () => {
+        try {
+            const token = localStorage.getItem('takcakap_auth_token');
+            const res = await fetch('/api/admin/points/settings', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCooldownHours(data.voucher_cooldown_hours);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const fetchTiers = async () => {
         setTiersLoading(true);
@@ -165,6 +185,30 @@ export default function AdminPoints() {
         }
     };
 
+    const handleSaveCooldown = async () => {
+        if (confirmText !== 'CONFIRM') return;
+        setSavingCooldown(true);
+        try {
+            const token = localStorage.getItem('takcakap_auth_token');
+            const res = await fetch('/api/admin/points/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ voucher_cooldown_hours: cooldownHours })
+            });
+            if (res.ok) {
+                alert('Cooldown limit updated successfully!');
+                setConfirmText('');
+            } else {
+                alert('Failed to update cooldown limit');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update cooldown limit');
+        } finally {
+            setSavingCooldown(false);
+        }
+    };
+
     return (
         <div className="flex min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white">
             {/* Sidebar */}
@@ -253,6 +297,41 @@ export default function AdminPoints() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </section>
+
+                <section className="mb-10">
+                    <h3 className="text-xl font-bold mb-4">Redemption Rules</h3>
+                    <div className="bg-white dark:bg-slate-800 border border-[#e7f4e7] dark:border-white/10 rounded-xl p-6 shadow-sm">
+                        <div className="max-w-md">
+                            <label className="block text-sm font-bold mb-2">Voucher Cooldown Limit (Hours)</label>
+                            <p className="text-sm text-gray-500 mb-4">Users can only redeem one voucher every X hours. Set to 0 to disable.</p>
+                            
+                            <input 
+                                type="number" 
+                                min="0"
+                                className="w-full border rounded-lg p-2 mb-4 dark:bg-slate-700 dark:border-slate-600"
+                                value={cooldownHours}
+                                onChange={e => setCooldownHours(Number(e.target.value))}
+                            />
+
+                            <label className="block text-sm font-bold mb-2">Type "CONFIRM" to save</label>
+                            <input 
+                                type="text" 
+                                className="w-full border rounded-lg p-2 mb-4 dark:bg-slate-700 dark:border-slate-600"
+                                value={confirmText}
+                                onChange={e => setConfirmText(e.target.value)}
+                                placeholder="CONFIRM"
+                            />
+
+                            <button 
+                                onClick={handleSaveCooldown}
+                                disabled={confirmText !== 'CONFIRM' || savingCooldown}
+                                className="bg-primary text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition-opacity"
+                            >
+                                {savingCooldown ? 'Processing...' : 'Save Changes'}
+                            </button>
+                        </div>
                     </div>
                 </section>
 

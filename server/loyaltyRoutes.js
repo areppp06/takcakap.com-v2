@@ -46,6 +46,26 @@ module.exports = (requireAuth, requireAdmin) => {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const data = await loyaltyService.getUserPointsData(req.user.id, page, limit);
+
+            const [settings] = await db.query(`SELECT voucher_cooldown_hours FROM shop_settings LIMIT 1`);
+            const cooldownHours = settings[0]?.voucher_cooldown_hours || 0;
+            
+            if (cooldownHours > 0) {
+                const [lastVoucher] = await db.query(`
+                    SELECT created_at FROM vouchers 
+                    WHERE user_id = ? AND source = 'points_redemption'
+                    ORDER BY created_at DESC LIMIT 1
+                `, [req.user.id]);
+                
+                if (lastVoucher.length > 0) {
+                    const lastRedemptionTime = new Date(lastVoucher[0].created_at);
+                    const cooldownEndsAt = new Date(lastRedemptionTime.getTime() + cooldownHours * 60 * 60 * 1000);
+                    if (cooldownEndsAt > new Date()) {
+                        data.cooldownEndsAt = cooldownEndsAt.toISOString();
+                    }
+                }
+            }
+
             res.json(data);
         } catch (err) {
             console.error('Error fetching user points:', err);
@@ -85,8 +105,27 @@ module.exports = (requireAuth, requireAdmin) => {
     router.post('/user/points/redeem', requireAuth, async (req, res) => {
         const { points } = req.body;
         const pointsToRedeem = Number(points);
-        
+
         try {
+            const [settings] = await db.query(`SELECT voucher_cooldown_hours FROM shop_settings LIMIT 1`);
+            const cooldownHours = settings[0]?.voucher_cooldown_hours || 0;
+
+            if (cooldownHours > 0) {
+                const [lastVoucher] = await db.query(`
+                    SELECT created_at FROM vouchers 
+                    WHERE user_id = ? AND source = 'points_redemption'
+                    ORDER BY created_at DESC LIMIT 1
+                `, [req.user.id]);
+                
+                if (lastVoucher.length > 0) {
+                    const lastRedemptionTime = new Date(lastVoucher[0].created_at);
+                    const cooldownEndsAt = new Date(lastRedemptionTime.getTime() + cooldownHours * 60 * 60 * 1000);
+                    if (cooldownEndsAt > new Date()) {
+                        return res.status(400).json({ error: `You can only redeem one voucher every ${cooldownHours} hours.` });
+                    }
+                }
+            }
+
             const [tiers] = await db.query(
                 `SELECT discount_amount FROM point_redemption_tiers WHERE points_required = ? AND is_active = TRUE`,
                 [pointsToRedeem]
@@ -186,6 +225,27 @@ module.exports = (requireAuth, requireAdmin) => {
     // ==========================================
     // ADMIN APIs
     // ==========================================
+
+    router.get('/admin/points/settings', requireAdmin, async (req, res) => {
+        try {
+            const [settings] = await db.query(`SELECT voucher_cooldown_hours FROM shop_settings LIMIT 1`);
+            res.json({ voucher_cooldown_hours: settings[0]?.voucher_cooldown_hours || 0 });
+        } catch (err) {
+            console.error('Error fetching admin points settings:', err);
+            res.status(500).json({ error: 'Failed to fetch settings' });
+        }
+    });
+
+    router.put('/admin/points/settings', requireAdmin, async (req, res) => {
+        const { voucher_cooldown_hours } = req.body;
+        try {
+            await db.query(`UPDATE shop_settings SET voucher_cooldown_hours = ? LIMIT 1`, [voucher_cooldown_hours || 0]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Error updating admin points settings:', err);
+            res.status(500).json({ error: 'Failed to update settings' });
+        }
+    });
 
     router.get('/admin/points/tiers', requireAdmin, async (req, res) => {
         try {

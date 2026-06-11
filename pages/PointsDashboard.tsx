@@ -24,6 +24,8 @@ export default function PointsDashboard() {
     const [historyPage, setHistoryPage] = useState(1);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [totalSaved, setTotalSaved] = useState<number>(0);
+    const [cooldownEndsAt, setCooldownEndsAt] = useState<Date | null>(null);
+    const [timeLeft, setTimeLeft] = useState<string>('');
     
     const VOUCHERS_PER_PAGE = 4;
     const HISTORY_PER_PAGE = 10;
@@ -47,8 +49,14 @@ export default function PointsDashboard() {
             ]);
             
             if (pointsRes.ok) {
-                setPointsData(await pointsRes.json());
+                const data = await pointsRes.json();
+                setPointsData(data);
                 setHistoryPage(1);
+                if (data.cooldownEndsAt) {
+                    setCooldownEndsAt(new Date(data.cooldownEndsAt));
+                } else {
+                    setCooldownEndsAt(null);
+                }
             }
             if (vouchersRes.ok) setVouchers(await vouchersRes.json());
             if (savingsRes.ok) {
@@ -80,6 +88,25 @@ export default function PointsDashboard() {
             setHistoryLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (!cooldownEndsAt) return;
+        const updateTimer = () => {
+            const now = new Date();
+            const diff = cooldownEndsAt.getTime() - now.getTime();
+            if (diff <= 0) {
+                setCooldownEndsAt(null);
+                setTimeLeft('');
+            } else {
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                setTimeLeft(`${hours}h ${minutes}m`);
+            }
+        };
+        updateTimer();
+        const interval = setInterval(updateTimer, 60000);
+        return () => clearInterval(interval);
+    }, [cooldownEndsAt]);
 
     const handleRedeemClick = (points: number, discount: number) => {
         setConfirmRedeem({ points, discount });
@@ -150,20 +177,31 @@ export default function PointsDashboard() {
                         </div>
                     </div>
                     
+                    {/* Cooldown Warning */}
+                    {cooldownEndsAt && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-orange-800">
+                            <span className="material-symbols-outlined text-orange-500">schedule</span>
+                            <div>
+                                <p className="font-bold">Redemption on Cooldown</p>
+                                <p className="text-sm opacity-90">You can redeem your next voucher in: <strong className="font-mono text-base">{timeLeft}</strong></p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Redeem Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                         {tiers.map(tier => (
-                            <div key={tier.id} className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
+                            <div key={tier.id} className={`bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm ${cooldownEndsAt ? 'opacity-60' : ''}`}>
                                 <div>
                                     <div className="font-extrabold text-lg mb-1 text-gray-900">RM{Number(tier.discount_amount).toFixed(0)} Off</div>
                                     <div className="text-sm text-gray-600 mb-4">(Redeem {tier.points_required} pts)</div>
                                 </div>
                                 <button 
                                     onClick={() => handleRedeemClick(tier.points_required, tier.discount_amount)}
-                                    disabled={balance < tier.points_required || redeeming}
+                                    disabled={balance < tier.points_required || redeeming || !!cooldownEndsAt}
                                     className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
                                 >
-                                    Redeem
+                                    {cooldownEndsAt ? 'On Cooldown' : 'Redeem'}
                                 </button>
                             </div>
                         ))}
