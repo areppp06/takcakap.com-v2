@@ -4035,7 +4035,7 @@ app.get('/api/admin/customers', requireAdmin, async (req, res) => {
                     COALESCE(u.is_suspended, 0) AS is_suspended,
                     u.suspended_at,
                     COUNT(o.id) AS order_count,
-                    COALESCE(SUM(o.total_amount), 0) AS total_spent,
+                    COALESCE(SUM(o.total_amount - COALESCE(o.refund_amount, 0)), 0) AS total_spent,
                     MAX(o.created_at) AS last_order_at
                 FROM users u
                 LEFT JOIN orders o ON o.user_id = u.id AND o.status NOT IN ('Cancelled', 'Pending Payment')
