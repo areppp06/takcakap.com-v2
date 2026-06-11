@@ -90,31 +90,48 @@ async function redeemVoucher(userId, pointsToRedeem, voucherConfig) {
             throw new Error('Insufficient points balance');
         }
 
-        // Generate unique 6-character code
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code = '';
-        for (let i = 0; i < 6; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        
         // Expiry 30 days
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 30);
 
-        // Insert Voucher
-        const [voucherResult] = await connection.query(
-            `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, is_active, user_id, is_redeemed, max_uses, times_used, source)
-             VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, FALSE, 1, 0, 'points_redemption')`,
-            [
-                code, 
-                voucherConfig.type, 
-                voucherConfig.discountValue, 
-                voucherConfig.minSpend, 
-                voucherConfig.maxDiscount, 
-                expiresAt, 
-                userId
-            ]
-        );
+        let code = '';
+        let voucherResult = null;
+        let attempts = 0;
+        const maxAttempts = 5;
+
+        // Generate unique 6-character code with retry loop to guarantee absolute uniqueness
+        while (attempts < maxAttempts) {
+            code = '';
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+
+            try {
+                // Insert Voucher
+                [voucherResult] = await connection.query(
+                    `INSERT INTO vouchers (code, type, discount_value, min_spend, max_discount, expires_at, is_active, user_id, is_redeemed, max_uses, times_used, source)
+                     VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, FALSE, 1, 0, 'points_redemption')`,
+                    [
+                        code, 
+                        voucherConfig.type, 
+                        voucherConfig.discountValue, 
+                        voucherConfig.minSpend, 
+                        voucherConfig.maxDiscount, 
+                        expiresAt, 
+                        userId
+                    ]
+                );
+                break; // Success! Code is unique
+            } catch (err) {
+                if (err.code === 'ER_DUP_ENTRY') {
+                    attempts++;
+                    if (attempts >= maxAttempts) throw new Error('Failed to generate a unique voucher code after maximum attempts');
+                } else {
+                    throw err; // Other database errors
+                }
+            }
+        }
 
         // Deduct points
         await connection.query(
