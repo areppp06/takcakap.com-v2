@@ -70,17 +70,33 @@ module.exports = (requireAuth, requireAdmin) => {
         }
     });
 
+    router.get('/user/points/tiers', async (req, res) => {
+        try {
+            const [tiers] = await db.query(
+                `SELECT id, points_required, discount_amount FROM point_redemption_tiers WHERE is_active = TRUE ORDER BY points_required ASC`
+            );
+            res.json(tiers);
+        } catch (err) {
+            console.error('Error fetching point tiers:', err);
+            res.status(500).json({ error: 'Failed to fetch tiers' });
+        }
+    });
+
     router.post('/user/points/redeem', requireAuth, async (req, res) => {
         const { points } = req.body;
         const pointsToRedeem = Number(points);
         
-        let discountValue = 0;
-        if (pointsToRedeem === 200) discountValue = 1;
-        else if (pointsToRedeem === 800) discountValue = 5;
-        else if (pointsToRedeem === 1480) discountValue = 10;
-        else {
-            return res.status(400).json({ error: 'Invalid redemption amount. Please select a valid reward.' });
-        }
+        try {
+            const [tiers] = await db.query(
+                `SELECT discount_amount FROM point_redemption_tiers WHERE points_required = ? AND is_active = TRUE`,
+                [pointsToRedeem]
+            );
+
+            if (tiers.length === 0) {
+                return res.status(400).json({ error: 'Invalid redemption amount. Please select a valid reward.' });
+            }
+
+            const discountValue = parseFloat(tiers[0].discount_amount);
         
         const voucherConfig = {
             type: 'fixed',
@@ -89,8 +105,7 @@ module.exports = (requireAuth, requireAdmin) => {
             maxDiscount: null
         };
 
-        try {
-            const result = await loyaltyService.redeemVoucher(req.user.id, pointsToRedeem, voucherConfig);
+        const result = await loyaltyService.redeemVoucher(req.user.id, pointsToRedeem, voucherConfig);
             
             try {
                 if (typeof emailService.queueVoucherEmail === 'function') {
@@ -102,8 +117,8 @@ module.exports = (requireAuth, requireAdmin) => {
 
             res.json(result);
         } catch (err) {
-            if (err.message === 'Insufficient points balance') {
-                return res.status(400).json({ error: err.message });
+            if (err.message.includes('Insufficient points')) {
+                return res.status(400).json({ error: 'Insufficient points' });
             }
             res.status(500).json({ error: 'Failed to redeem voucher' });
         }
@@ -171,6 +186,56 @@ module.exports = (requireAuth, requireAdmin) => {
     // ==========================================
     // ADMIN APIs
     // ==========================================
+
+    router.get('/admin/points/tiers', requireAdmin, async (req, res) => {
+        try {
+            const [tiers] = await db.query(`SELECT * FROM point_redemption_tiers ORDER BY points_required ASC`);
+            res.json(tiers);
+        } catch (err) {
+            console.error('Error fetching admin point tiers:', err);
+            res.status(500).json({ error: 'Failed to fetch tiers' });
+        }
+    });
+
+    router.post('/admin/points/tiers', requireAdmin, async (req, res) => {
+        const { points_required, discount_amount, is_active } = req.body;
+        try {
+            await db.query(
+                `INSERT INTO point_redemption_tiers (points_required, discount_amount, is_active) VALUES (?, ?, ?)`,
+                [points_required, discount_amount, is_active ?? true]
+            );
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Error creating point tier:', err);
+            res.status(500).json({ error: 'Failed to create tier' });
+        }
+    });
+
+    router.put('/admin/points/tiers/:id', requireAdmin, async (req, res) => {
+        const { id } = req.params;
+        const { points_required, discount_amount, is_active } = req.body;
+        try {
+            await db.query(
+                `UPDATE point_redemption_tiers SET points_required = ?, discount_amount = ?, is_active = ? WHERE id = ?`,
+                [points_required, discount_amount, is_active ?? true, id]
+            );
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Error updating point tier:', err);
+            res.status(500).json({ error: 'Failed to update tier' });
+        }
+    });
+
+    router.delete('/admin/points/tiers/:id', requireAdmin, async (req, res) => {
+        const { id } = req.params;
+        try {
+            await db.query(`DELETE FROM point_redemption_tiers WHERE id = ?`, [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Error deleting point tier:', err);
+            res.status(500).json({ error: 'Failed to delete tier' });
+        }
+    });
 
     router.get('/admin/points/users', requireAdmin, async (req, res) => {
         try {
@@ -324,13 +389,12 @@ module.exports = (requireAuth, requireAdmin) => {
     router.get('/admin/points/stats', requireAdmin, async (req, res) => {
         try {
             const [rows] = await db.query(`
-                SELECT SUM(points) as total_distributed
+                SELECT SUM(points) as circulating_coin
                 FROM points_transactions
-                WHERE transaction_type IN ('earned', 'admin_add')
             `);
-            const totalPoints = Number(rows[0]?.total_distributed || 0);
-            const estValueRM = totalPoints / 2;
-            res.json({ totalDistributed: totalPoints, estValueRM });
+            const totalPoints = Number(rows[0]?.circulating_coin || 0);
+            const estValueRM = totalPoints / 200;
+            res.json({ circulatingCoin: totalPoints, estValueRM });
         } catch (err) {
             console.error('Failed to fetch points stats:', err);
             res.status(500).json({ error: 'Failed to fetch points stats' });

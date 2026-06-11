@@ -20,8 +20,13 @@ export default function AdminPoints() {
     const [points, setPoints] = useState<number | ''>('');
     const [description, setDescription] = useState('');
 
-    const [stats, setStats] = useState({ totalDistributed: 0, estValueRM: 0 });
+    const [stats, setStats] = useState({ circulatingCoin: 0, estValueRM: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
+
+    const [tiers, setTiers] = useState<any[]>([]);
+    const [tiersLoading, setTiersLoading] = useState(true);
+    const [tierModalOpen, setTierModalOpen] = useState(false);
+    const [editingTier, setEditingTier] = useState<any>(null);
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -38,7 +43,23 @@ export default function AdminPoints() {
 
     useEffect(() => {
         fetchStats();
+        fetchTiers();
     }, []);
+
+    const fetchTiers = async () => {
+        setTiersLoading(true);
+        try {
+            const token = localStorage.getItem('takcakap_auth_token');
+            const res = await fetch('/api/admin/points/tiers', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) setTiers(await res.json());
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setTiersLoading(false);
+        }
+    };
 
     const fetchStats = async () => {
         setStatsLoading(true);
@@ -98,12 +119,49 @@ export default function AdminPoints() {
             setSelectedUser(null);
             setPoints('');
             setDescription('');
-            fetchUsers();
+            fetchUsers(page);
             fetchStats();
         } catch (err: any) {
             alert(err.message);
         } finally {
             setAdjusting(false);
+        }
+    };
+
+    const handleSaveTier = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingTier) return;
+        try {
+            const token = localStorage.getItem('takcakap_auth_token');
+            const url = editingTier.id ? `/api/admin/points/tiers/${editingTier.id}` : '/api/admin/points/tiers';
+            const method = editingTier.id ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(editingTier)
+            });
+            if (res.ok) {
+                setTierModalOpen(false);
+                fetchTiers();
+            } else {
+                alert('Failed to save tier');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleDeleteTier = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this tier?')) return;
+        try {
+            const token = localStorage.getItem('takcakap_auth_token');
+            const res = await fetch(`/api/admin/points/tiers/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) fetchTiers();
+        } catch (err) {
+            console.error(err);
         }
     };
 
@@ -137,9 +195,9 @@ export default function AdminPoints() {
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-primary/10 shadow-sm relative overflow-hidden">
                         <div className="flex justify-between items-start mb-4 gap-2">
                             <div>
-                                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Distributed Coins</p>
+                                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Current Circulating Coin</p>
                                 <h3 className="text-3xl font-bold mt-1 text-[#b49820]">
-                                    {statsLoading ? '...' : stats.totalDistributed.toLocaleString()} pts
+                                    {statsLoading ? '...' : stats.circulatingCoin.toLocaleString()} pts
                                 </h3>
                             </div>
                             <span className="material-symbols-outlined text-4xl text-yellow-400 opacity-50">stars</span>
@@ -155,6 +213,46 @@ export default function AdminPoints() {
                             </div>
                             <span className="material-symbols-outlined text-4xl text-primary opacity-50">payments</span>
                         </div>
+                    </div>
+                </section>
+
+                <section className="mb-10">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-bold">Voucher Redemption Tiers</h3>
+                        <button onClick={() => { setEditingTier({ points_required: '', discount_amount: '', is_active: true }); setTierModalOpen(true); }} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors">
+                            Add Tier
+                        </button>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 border border-[#e7f4e7] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
+                        <table className="w-full text-left">
+                            <thead className="bg-[#f8fcf8] dark:bg-white/5 text-xs font-bold uppercase tracking-wider text-[#499c49]">
+                                <tr>
+                                    <th className="px-6 py-4">Points Required</th>
+                                    <th className="px-6 py-4">Discount (RM)</th>
+                                    <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
+                                {tiersLoading ? (
+                                    <tr><td colSpan={4} className="p-6 text-center text-gray-500">Loading tiers...</td></tr>
+                                ) : tiers.map(tier => (
+                                    <tr key={tier.id}>
+                                        <td className="px-6 py-4 font-bold">{tier.points_required} pts</td>
+                                        <td className="px-6 py-4 font-bold text-primary">{formatCurrency(tier.discount_amount)}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${tier.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {tier.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right space-x-3">
+                                            <button onClick={() => { setEditingTier(tier); setTierModalOpen(true); }} className="text-blue-600 hover:underline text-sm font-bold">Edit</button>
+                                            <button onClick={() => handleDeleteTier(tier.id)} className="text-red-600 hover:underline text-sm font-bold">Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </section>
 
@@ -252,6 +350,154 @@ export default function AdminPoints() {
                     </div>
                 </div>
             </main>
+            {/* Adjust Points Modal */}
+            {selectedUser && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Adjust Points</h3>
+                            <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        
+                        <div className="mb-4">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Customer</p>
+                            <p className="font-bold">{selectedUser.name} <span className="text-sm font-normal text-slate-500">({selectedUser.email})</span></p>
+                            <p className="text-sm mt-1">Current Balance: <strong className="text-[#b49820]">{selectedUser.points_balance} pts</strong></p>
+                        </div>
+
+                        <form onSubmit={handleAdjust} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Action</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2">
+                                        <input type="radio" checked={action === 'add'} onChange={() => setAction('add')} />
+                                        <span>Add Points</span>
+                                    </label>
+                                    <label className="flex items-center gap-2">
+                                        <input type="radio" checked={action === 'deduct'} onChange={() => setAction('deduct')} />
+                                        <span>Deduct Points</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Points Amount</label>
+                                <input 
+                                    type="number" 
+                                    min="1"
+                                    required
+                                    className="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600"
+                                    value={points}
+                                    onChange={e => setPoints(e.target.value ? Number(e.target.value) : '')}
+                                    placeholder="e.g. 100"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Description / Reason</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    className="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600"
+                                    value={description}
+                                    onChange={e => setDescription(e.target.value)}
+                                    placeholder="e.g. Compensation for delayed order"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setSelectedUser(null)}
+                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={adjusting || !points || points <= 0 || !description}
+                                    className={`flex-1 font-bold py-2 rounded-lg text-white ${action === 'add' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} disabled:opacity-50`}
+                                >
+                                    {adjusting ? 'Processing...' : 'Confirm'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Tier Edit Modal */}
+            {tierModalOpen && editingTier && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">{editingTier.id ? 'Edit Tier' : 'Add Tier'}</h3>
+                            <button onClick={() => setTierModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleSaveTier} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Points Required</label>
+                                <input 
+                                    type="number" 
+                                    min="1"
+                                    required
+                                    className="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600"
+                                    value={editingTier.points_required}
+                                    onChange={e => setEditingTier({...editingTier, points_required: Number(e.target.value)})}
+                                    placeholder="e.g. 200"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Discount Amount (RM)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    min="0.01"
+                                    required
+                                    className="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600"
+                                    value={editingTier.discount_amount}
+                                    onChange={e => setEditingTier({...editingTier, discount_amount: Number(e.target.value)})}
+                                    placeholder="e.g. 1.00"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="flex items-center gap-2">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={editingTier.is_active}
+                                        onChange={e => setEditingTier({...editingTier, is_active: e.target.checked})}
+                                        className="w-4 h-4 text-primary rounded"
+                                    />
+                                    <span className="text-sm font-medium">Active (Visible to users)</span>
+                                </label>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setTierModalOpen(false)}
+                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    className="flex-1 bg-primary hover:bg-primary-dark font-bold py-2 rounded-lg text-white"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

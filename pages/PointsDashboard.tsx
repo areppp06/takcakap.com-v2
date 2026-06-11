@@ -14,10 +14,11 @@ export default function PointsDashboard() {
     const navigate = useNavigate();
     const [pointsData, setPointsData] = useState<PointsData | null>(null);
     const [vouchers, setVouchers] = useState<any[]>([]);
+    const [tiers, setTiers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [redeeming, setRedeeming] = useState(false);
     const [error, setError] = useState('');
-    const [confirmRedeem, setConfirmRedeem] = useState<number | null>(null);
+    const [confirmRedeem, setConfirmRedeem] = useState<{points: number, discount: number} | null>(null);
     const [successCode, setSuccessCode] = useState<string | null>(null);
     const [vouchersPage, setVouchersPage] = useState(1);
     const [historyPage, setHistoryPage] = useState(1);
@@ -38,10 +39,11 @@ export default function PointsDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [pointsRes, vouchersRes, savingsRes] = await Promise.all([
+            const [pointsRes, vouchersRes, savingsRes, tiersRes] = await Promise.all([
                 fetch(`/api/user/points?page=1&limit=${HISTORY_PER_PAGE}`, { headers: { Authorization: `Bearer ${token}` } }),
                 fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/user/vouchers/savings', { headers: { Authorization: `Bearer ${token}` } })
+                fetch('/api/user/vouchers/savings', { headers: { Authorization: `Bearer ${token}` } }),
+                fetch('/api/user/points/tiers')
             ]);
             
             if (pointsRes.ok) {
@@ -53,6 +55,7 @@ export default function PointsDashboard() {
                 const s = await savingsRes.json();
                 setTotalSaved(s.totalSaved || 0);
             }
+            if (tiersRes.ok) setTiers(await tiersRes.json());
         } catch (err) {
             console.error(err);
         } finally {
@@ -78,13 +81,13 @@ export default function PointsDashboard() {
         }
     };
 
-    const handleRedeemClick = (points: number) => {
-        setConfirmRedeem(points);
+    const handleRedeemClick = (points: number, discount: number) => {
+        setConfirmRedeem({ points, discount });
     };
 
     const executeRedeem = async () => {
         if (!confirmRedeem) return;
-        const pointsToRedeem = confirmRedeem;
+        const pointsToRedeem = confirmRedeem.points;
         setRedeeming(true);
         setError('');
         try {
@@ -149,45 +152,21 @@ export default function PointsDashboard() {
                     
                     {/* Redeem Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                        <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
-                            <div>
-                                <div className="font-extrabold text-lg mb-1 text-gray-900">RM1 Off</div>
-                                <div className="text-sm text-gray-600 mb-4">(Redeem 200 pts)</div>
+                        {tiers.map(tier => (
+                            <div key={tier.id} className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
+                                <div>
+                                    <div className="font-extrabold text-lg mb-1 text-gray-900">RM{Number(tier.discount_amount).toFixed(0)} Off</div>
+                                    <div className="text-sm text-gray-600 mb-4">(Redeem {tier.points_required} pts)</div>
+                                </div>
+                                <button 
+                                    onClick={() => handleRedeemClick(tier.points_required, tier.discount_amount)}
+                                    disabled={balance < tier.points_required || redeeming}
+                                    className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                                >
+                                    Redeem
+                                </button>
                             </div>
-                            <button 
-                                onClick={() => handleRedeemClick(200)}
-                                disabled={balance < 200 || redeeming}
-                                className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                            >
-                                Redeem
-                            </button>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
-                            <div>
-                                <div className="font-extrabold text-lg mb-1 text-gray-900">RM5 Off</div>
-                                <div className="text-sm text-gray-600 mb-4">(Redeem 800 pts)</div>
-                            </div>
-                            <button 
-                                onClick={() => handleRedeemClick(800)}
-                                disabled={balance < 800 || redeeming}
-                                className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                            >
-                                Redeem
-                            </button>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm">
-                            <div>
-                                <div className="font-extrabold text-lg mb-1 text-gray-900">RM10 Off</div>
-                                <div className="text-sm text-gray-600 mb-4">(Redeem 1,480 pts)</div>
-                            </div>
-                            <button 
-                                onClick={() => handleRedeemClick(1480)}
-                                disabled={balance < 1480 || redeeming}
-                                className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                            >
-                                Redeem
-                            </button>
-                        </div>
+                        ))}
                     </div>
 
                     {/* My Vouchers */}
@@ -303,7 +282,7 @@ export default function PointsDashboard() {
                         </div>
                         <h3 className="text-xl font-bold mb-2">Redeem Points</h3>
                         <p className="text-gray-600 mb-6 font-medium">
-                            Are you sure you want to redeem {confirmRedeem} points for RM{confirmRedeem / 200}?
+                            Are you sure you want to redeem {confirmRedeem.points} points for RM{Number(confirmRedeem.discount).toFixed(0)}?
                         </p>
                         <div className="flex gap-3">
                             <button 
