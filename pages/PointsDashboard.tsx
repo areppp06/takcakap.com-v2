@@ -217,14 +217,14 @@ export default function PointsDashboard() {
                                     className="overflow-y-auto flex-1 no-scrollbar pr-1 pb-4"
                                     onScroll={(e) => {
                                         const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-                                        if (scrollHeight - scrollTop <= clientHeight + 40) {
+                                        if (scrollHeight - scrollTop <= clientHeight + 100) {
                                             if (hasMoreHistory) {
                                                 setHistoryVisibleCount(v => v + HISTORY_PER_PAGE);
                                             }
                                         }
                                     }}
                                 >
-                                    <div className="relative border-l border-gray-200 ml-2 space-y-6">
+                                    <div className="relative border-l border-gray-200 ml-2 space-y-6 mb-4">
                                         {currentTransactions.map((tx) => {
                                             const isPositive = tx.points > 0;
                                             return (
@@ -239,6 +239,13 @@ export default function PointsDashboard() {
                                             );
                                         })}
                                     </div>
+                                    {!hasMoreHistory && transactions.length > 0 && (
+                                        <div className="py-4 text-center text-xs font-medium text-gray-400 flex items-center justify-center gap-2">
+                                            <span className="w-8 h-px bg-gray-200"></span>
+                                            You reached the beginning
+                                            <span className="w-8 h-px bg-gray-200"></span>
+                                        </div>
+                                    )}
                                 </div>
                                 {hasMoreHistory && (
                                     <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none"></div>
