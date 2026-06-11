@@ -97,7 +97,7 @@ async function redeemVoucher(userId, pointsToRedeem, voucherConfig) {
         let code = '';
         let voucherResult = null;
         let attempts = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 30;
 
         // Generate unique 6-character code with retry loop to guarantee absolute uniqueness
         while (attempts < maxAttempts) {

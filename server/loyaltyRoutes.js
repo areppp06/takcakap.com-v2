@@ -10,8 +10,8 @@ module.exports = (requireAuth, requireAdmin) => {
 
     function checkRateLimit(ip) {
         const now = Date.now();
-        const windowMs = 15 * 60 * 1000; // 15 mins
-        const maxAttempts = 5;
+        const windowMs = 90 * 60 * 1000; // 1hr 30mins
+        const maxAttempts = 11;
 
         let record = failedVoucherAttempts.get(ip);
         if (!record) {
@@ -110,7 +110,7 @@ module.exports = (requireAuth, requireAdmin) => {
     router.post('/user/vouchers/validate', requireAuth, async (req, res) => {
         const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
         if (!checkRateLimit(clientIp)) {
-            return res.status(429).json({ error: 'Too many invalid attempts. Please try again in 15 minutes.' });
+            return res.status(429).json({ error: 'Too many invalid attempts. Please try again in 1 hour 30 minutes.' });
         }
 
         const { code, subtotal } = req.body;
