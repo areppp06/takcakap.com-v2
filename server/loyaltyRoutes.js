@@ -51,6 +51,7 @@ module.exports = (requireAuth, requireAdmin) => {
             const cooldownHours = settings[0]?.voucher_cooldown_hours || 0;
             
             if (cooldownHours > 0) {
+                data.cooldownLimitHours = cooldownHours;
                 const [lastVoucher] = await db.query(`
                     SELECT created_at FROM vouchers 
                     WHERE user_id = ? AND source = 'points_redemption'

@@ -7,6 +7,7 @@ interface PointsData {
     balance: number;
     transactions: any[];
     totalTransactions: number;
+    cooldownLimitHours?: number;
 }
 
 export default function PointsDashboard() {
@@ -179,12 +180,17 @@ export default function PointsDashboard() {
                     
                     {/* Cooldown Warning */}
                     {cooldownEndsAt && (
-                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-orange-800">
-                            <span className="material-symbols-outlined text-orange-500">schedule</span>
-                            <div>
-                                <p className="font-bold">Redemption on Cooldown</p>
-                                <p className="text-sm opacity-90">You can redeem your next voucher in: <strong className="font-mono text-base">{timeLeft}</strong></p>
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-orange-800">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-orange-500">schedule</span>
+                                <div>
+                                    <p className="font-bold">Redemption on Cooldown</p>
+                                    <p className="text-sm opacity-90">Next redemption unlocks in <strong className="font-mono text-base">{timeLeft}</strong></p>
+                                </div>
                             </div>
+                            {pointsData?.cooldownLimitHours && (
+                                <p className="text-xs sm:text-right opacity-80 font-medium">Note: You can redeem one voucher every {pointsData.cooldownLimitHours}hrs</p>
+                            )}
                         </div>
                     )}
 
