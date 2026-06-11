@@ -13,6 +13,7 @@ export default function AdminVouchers() {
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const PAGE_SIZE = 15;
     
     const [stats, setStats] = useState({ today: 0, thisWeek: 0, thisMonth: 0 });
@@ -38,7 +39,10 @@ export default function AdminVouchers() {
     };
 
     useEffect(() => {
-        fetchVouchers();
+        fetchVouchers(page);
+    }, [page]);
+
+    useEffect(() => {
         fetchStats();
     }, []);
 
@@ -59,15 +63,17 @@ export default function AdminVouchers() {
         }
     };
 
-    const fetchVouchers = async () => {
+    const fetchVouchers = async (p: number = 1) => {
         setLoading(true);
         try {
             const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/vouchers', {
+            const res = await fetch(`/api/admin/vouchers?page=${p}&limit=${PAGE_SIZE}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
-                setVouchers(await res.json());
+                const data = await res.json();
+                setVouchers(data.vouchers || []);
+                setTotalPages(data.totalPages || 1);
             }
         } catch (err) {
             console.error(err);
@@ -240,10 +246,8 @@ export default function AdminVouchers() {
                                 <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
                                     {loading ? (
                                         <tr><td colSpan={5} className="p-6 text-center text-gray-500">Loading...</td></tr>
-                                    ) : (() => {
-                                        const totalPages = Math.max(1, Math.ceil(vouchers.length / PAGE_SIZE));
-                                        const currentVouchers = vouchers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-                                        return currentVouchers.map(v => (
+                                    ) : (
+                                        vouchers.map(v => (
                                         <tr key={v.id} className={v.is_redeemed ? 'opacity-50' : ''}>
                                             <td className="px-6 py-4">
                                                 <div className="font-bold tracking-wide">{v.code}</div>
@@ -277,8 +281,8 @@ export default function AdminVouchers() {
                                                 )}
                                             </td>
                                         </tr>
-                                        ));
-                                    })()}
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>

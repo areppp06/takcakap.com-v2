@@ -12,7 +12,9 @@ module.exports = (requireAuth, requireAdmin) => {
 
     router.get('/user/points', requireAuth, async (req, res) => {
         try {
-            const data = await loyaltyService.getUserPointsData(req.user.id);
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const data = await loyaltyService.getUserPointsData(req.user.id, page, limit);
             res.json(data);
         } catch (err) {
             console.error('Error fetching user points:', err);
@@ -106,10 +108,19 @@ module.exports = (requireAuth, requireAdmin) => {
 
     router.get('/admin/points/users', requireAdmin, async (req, res) => {
         try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
+
             const [users] = await db.query(
-                `SELECT id, name, email, points_balance FROM users ORDER BY points_balance DESC`
+                `SELECT id, name, email, points_balance FROM users ORDER BY points_balance DESC LIMIT ? OFFSET ?`,
+                [limit, offset]
             );
-            res.json(users);
+
+            const [countResult] = await db.query(`SELECT COUNT(*) as total FROM users`);
+            const total = countResult[0].total;
+
+            res.json({ users, total, totalPages: Math.ceil(total / limit) });
         } catch (err) {
             res.status(500).json({ error: 'Failed to fetch user points' });
         }
@@ -162,13 +173,22 @@ module.exports = (requireAuth, requireAdmin) => {
 
     router.get('/admin/vouchers', requireAdmin, async (req, res) => {
         try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
+
             const [vouchers] = await db.query(`
                 SELECT v.*, u.name as user_name, u.email as user_email
                 FROM vouchers v
                 LEFT JOIN users u ON v.user_id = u.id
                 ORDER BY v.created_at DESC
-            `);
-            res.json(vouchers);
+                LIMIT ? OFFSET ?
+            `, [limit, offset]);
+            
+            const [countResult] = await db.query(`SELECT COUNT(*) as total FROM vouchers`);
+            const total = countResult[0].total;
+
+            res.json({ vouchers, total, totalPages: Math.ceil(total / limit) });
         } catch (err) {
             res.status(500).json({ error: 'Failed to fetch vouchers' });
         }

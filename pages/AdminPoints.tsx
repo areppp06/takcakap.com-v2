@@ -12,6 +12,7 @@ export default function AdminPoints() {
     const [loading, setLoading] = useState(true);
     const [adjusting, setAdjusting] = useState(false);
     const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const PAGE_SIZE = 15;
     
     const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -32,7 +33,10 @@ export default function AdminPoints() {
     };
 
     useEffect(() => {
-        fetchUsers();
+        fetchUsers(page);
+    }, [page]);
+
+    useEffect(() => {
         fetchStats();
     }, []);
 
@@ -53,15 +57,17 @@ export default function AdminPoints() {
         }
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (p: number = 1) => {
         setLoading(true);
         try {
             const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/points/users', {
+            const res = await fetch(`/api/admin/points/users?page=${p}&limit=${PAGE_SIZE}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
-                setUsers(await res.json());
+                const data = await res.json();
+                setUsers(data.users || []);
+                setTotalPages(data.totalPages || 1);
             }
         } catch (err) {
             console.error(err);
@@ -168,10 +174,8 @@ export default function AdminPoints() {
                                 <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
                                     {loading ? (
                                         <tr><td colSpan={4} className="p-6 text-center text-gray-500">Loading...</td></tr>
-                                    ) : (() => {
-                                        const totalPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
-                                        const currentUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-                                        return currentUsers.map(u => (
+                                    ) : (
+                                        users.map(u => (
                                         <tr key={u.id}>
                                             <td className="px-6 py-4 font-bold">{u.name}</td>
                                             <td className="px-6 py-4">{u.email}</td>
@@ -185,8 +189,8 @@ export default function AdminPoints() {
                                                 </button>
                                             </td>
                                         </tr>
-                                        ));
-                                    })()}
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>

@@ -58,16 +58,23 @@ async function awardPointsForOrder(orderId) {
     }
 }
 
-async function getUserPointsData(userId) {
+async function getUserPointsData(userId, page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
     const [users] = await db.query(`SELECT points_balance FROM users WHERE id = ?`, [userId]);
     const balance = users[0]?.points_balance || 0;
 
     const [transactions] = await db.query(
-        `SELECT * FROM points_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
-        [userId]
+        `SELECT * FROM points_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        [userId, limit, offset]
     );
 
-    return { balance, transactions };
+    const [countResult] = await db.query(
+        `SELECT COUNT(*) as total FROM points_transactions WHERE user_id = ?`,
+        [userId]
+    );
+    const totalTransactions = countResult[0].total;
+
+    return { balance, transactions, totalTransactions };
 }
 
 async function redeemVoucher(userId, pointsToRedeem, voucherConfig) {

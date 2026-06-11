@@ -6,6 +6,7 @@ import UserDashboardLayout from '../components/UserDashboardLayout';
 interface PointsData {
     balance: number;
     transactions: any[];
+    totalTransactions: number;
 }
 
 export default function PointsDashboard() {
@@ -19,7 +20,8 @@ export default function PointsDashboard() {
     const [confirmRedeem, setConfirmRedeem] = useState<number | null>(null);
     const [successCode, setSuccessCode] = useState<string | null>(null);
     const [vouchersPage, setVouchersPage] = useState(1);
-    const [historyVisibleCount, setHistoryVisibleCount] = useState(10);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [historyLoading, setHistoryLoading] = useState(false);
     
     const VOUCHERS_PER_PAGE = 4;
     const HISTORY_PER_PAGE = 10;
@@ -36,16 +38,37 @@ export default function PointsDashboard() {
         setLoading(true);
         try {
             const [pointsRes, vouchersRes] = await Promise.all([
-                fetch('/api/user/points', { headers: { Authorization: `Bearer ${token}` } }),
+                fetch(`/api/user/points?page=1&limit=${HISTORY_PER_PAGE}`, { headers: { Authorization: `Bearer ${token}` } }),
                 fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } })
             ]);
             
-            if (pointsRes.ok) setPointsData(await pointsRes.json());
+            if (pointsRes.ok) {
+                setPointsData(await pointsRes.json());
+                setHistoryPage(1);
+            }
             if (vouchersRes.ok) setVouchers(await vouchersRes.json());
         } catch (err) {
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadMoreHistory = async () => {
+        if (historyLoading || !pointsData) return;
+        const nextPage = historyPage + 1;
+        setHistoryLoading(true);
+        try {
+            const res = await fetch(`/api/user/points?page=${nextPage}&limit=${HISTORY_PER_PAGE}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                setPointsData(prev => prev ? { ...prev, transactions: [...prev.transactions, ...data.transactions] } : data);
+                setHistoryPage(nextPage);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setHistoryLoading(false);
         }
     };
 
@@ -92,8 +115,7 @@ export default function PointsDashboard() {
     const currentVouchers = displayVouchers.slice((vouchersPage - 1) * VOUCHERS_PER_PAGE, vouchersPage * VOUCHERS_PER_PAGE);
 
     const transactions = pointsData?.transactions || [];
-    const hasMoreHistory = historyVisibleCount < transactions.length;
-    const currentTransactions = transactions.slice(0, historyVisibleCount);
+    const hasMoreHistory = transactions.length < (pointsData?.totalTransactions || 0);
 
     return (
         <UserDashboardLayout>
@@ -218,14 +240,14 @@ export default function PointsDashboard() {
                                     onScroll={(e) => {
                                         const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
                                         if (scrollHeight - scrollTop <= clientHeight + 100) {
-                                            if (hasMoreHistory) {
-                                                setHistoryVisibleCount(v => v + HISTORY_PER_PAGE);
+                                            if (hasMoreHistory && !historyLoading) {
+                                                loadMoreHistory();
                                             }
                                         }
                                     }}
                                 >
                                     <div className="relative border-l border-gray-200 ml-2 space-y-6 mb-4">
-                                        {currentTransactions.map((tx) => {
+                                        {transactions.map((tx) => {
                                             const isPositive = tx.points > 0;
                                             return (
                                                 <div key={tx.id} className="relative pl-6">
@@ -247,8 +269,10 @@ export default function PointsDashboard() {
                                         </div>
                                     )}
                                 </div>
-                                {hasMoreHistory && (
-                                    <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none"></div>
+                                 {hasMoreHistory && (
+                                    <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none flex items-end justify-center pb-2">
+                                        {historyLoading && <span className="text-xs font-bold text-gray-500 bg-white/80 px-3 py-1 rounded-full shadow-sm">Loading...</span>}
+                                    </div>
                                 )}
                             </>
                         )}
