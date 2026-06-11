@@ -78,7 +78,7 @@ const Home: React.FC = () => {
   }, [notice]);
   useEffect(() => {
     if (isAuthenticated) {
-      api.getOrders()
+      api.getMyOrders()
         .then(orders => {
           const active = orders.find(o => o.status !== 'Completed' && o.status !== 'Cancelled');
           setActiveOrder(active || null);
