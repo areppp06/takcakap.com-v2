@@ -1353,26 +1353,26 @@ const Checkout: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex flex-col sm:flex-row gap-2 items-stretch">
+                            <div className="flex flex-col sm:flex-row gap-2 items-center">
                                 <button 
                                     onClick={() => setShowVoucherModal(true)}
-                                    className="bg-primary/10 text-primary border border-primary/20 px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/20 flex items-center justify-center gap-2 whitespace-nowrap transition-colors"
+                                    className="h-11 bg-primary/10 text-primary border border-primary/20 px-4 rounded-lg text-sm font-bold hover:bg-primary/20 flex items-center justify-center gap-2 whitespace-nowrap transition-colors"
                                 >
                                     <span className="material-symbols-outlined text-lg">local_activity</span>
                                     Select Voucher
                                 </button>
-                                <div className="flex gap-2 flex-1 items-stretch">
+                                <div className="flex gap-2 flex-1 w-full sm:w-auto">
                                     <input
                                         type="text"
                                         placeholder="Or enter code manually"
                                         value={voucherCodeInput}
                                         onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
-                                        className="flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none min-w-0"
+                                        className="h-11 flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none min-w-0"
                                     />
                                     <button 
                                         onClick={handleApplyVoucher}
                                         disabled={!voucherCodeInput.trim() || isApplyingVoucher}
-                                        className="bg-gray-800 dark:bg-gray-200 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center"
+                                        className="h-11 bg-gray-800 dark:bg-gray-200 text-white dark:text-black px-4 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center transition-colors"
                                     >
                                         {isApplyingVoucher ? '...' : 'Apply'}
                                     </button>
