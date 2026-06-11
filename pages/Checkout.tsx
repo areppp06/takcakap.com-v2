@@ -205,6 +205,9 @@ const Checkout: React.FC = () => {
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
   const [voucherError, setVoucherError] = useState('');
   const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
+  const [userVouchers, setUserVouchers] = useState<any[]>([]);
+  const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
 
   // Points State
   const [userPoints, setUserPoints] = useState(0);
@@ -230,23 +233,36 @@ const Checkout: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const loadPoints = async () => {
+    const loadPointsAndVouchers = async () => {
       const token = localStorage.getItem('takcakap_auth_token');
       if (!token) return;
       try {
-        const res = await fetch('/api/user/points', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
+        setIsLoadingVouchers(true);
+        const [pointsRes, vouchersRes] = await Promise.all([
+          fetch('/api/user/points', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        if (pointsRes.ok) {
+          const data = await pointsRes.json();
           setUserPoints(data.balance || 0);
         }
+        if (vouchersRes.ok) {
+          const vData = await vouchersRes.json();
+          const validVouchers = vData.filter((v: any) => 
+            v.is_active && 
+            !v.is_redeemed && 
+            (!v.expires_at || new Date(v.expires_at) > new Date())
+          );
+          setUserVouchers(validVouchers);
+        }
       } catch (err) {
-        console.error('Failed to load points', err);
+        console.error('Failed to load points and vouchers', err);
+      } finally {
+        setIsLoadingVouchers(false);
       }
     };
     if (isAuthenticated) {
-      loadPoints();
+      loadPointsAndVouchers();
     }
   }, [isAuthenticated]);
 
@@ -496,8 +512,9 @@ const Checkout: React.FC = () => {
       }
   };
 
-  const handleApplyVoucher = async () => {
-    if (!voucherCodeInput.trim()) return;
+  const handleApplyVoucher = async (codeToApply?: string | React.MouseEvent) => {
+    const code = typeof codeToApply === 'string' ? codeToApply : voucherCodeInput;
+    if (!code.trim()) return;
     setIsApplyingVoucher(true);
     setVoucherError('');
     try {
@@ -505,11 +522,12 @@ const Checkout: React.FC = () => {
         const response = await fetch('/api/user/vouchers/validate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ code: voucherCodeInput, subtotal: cartTotal })
+            body: JSON.stringify({ code: code, subtotal: cartTotal })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to apply voucher');
         setAppliedVoucher(data.voucher);
+        setVoucherCodeInput(code);
     } catch (err: any) {
         setVoucherError(err.message);
         setAppliedVoucher(null);
@@ -1335,21 +1353,30 @@ const Checkout: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Enter Voucher Code"
-                                    value={voucherCodeInput}
-                                    onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
-                                    className="flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
-                                />
+                            <div className="flex flex-col sm:flex-row gap-2">
                                 <button 
-                                    onClick={handleApplyVoucher}
-                                    disabled={!voucherCodeInput.trim() || isApplyingVoucher}
-                                    className="bg-gray-800 dark:bg-gray-200 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50"
+                                    onClick={() => setShowVoucherModal(true)}
+                                    className="bg-primary/10 text-primary border border-primary/20 px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/20 flex items-center justify-center gap-2 whitespace-nowrap transition-colors"
                                 >
-                                    {isApplyingVoucher ? '...' : 'Apply'}
+                                    <span className="material-symbols-outlined text-lg">local_activity</span>
+                                    Select Voucher
                                 </button>
+                                <div className="flex gap-2 flex-1">
+                                    <input
+                                        type="text"
+                                        placeholder="Or enter code manually"
+                                        value={voucherCodeInput}
+                                        onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                                        className="flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none min-w-0"
+                                    />
+                                    <button 
+                                        onClick={handleApplyVoucher}
+                                        disabled={!voucherCodeInput.trim() || isApplyingVoucher}
+                                        className="bg-gray-800 dark:bg-gray-200 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50"
+                                    >
+                                        {isApplyingVoucher ? '...' : 'Apply'}
+                                    </button>
+                                </div>
                             </div>
                         )}
                         {voucherError && <p className="text-red-500 text-xs mt-1">{voucherError}</p>}
@@ -1538,6 +1565,88 @@ const Checkout: React.FC = () => {
                     >
                         Save Address
                     </button>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {/* Select Voucher Modal */}
+       {showVoucherModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowVoucherModal(false)} />
+             <div className="relative bg-white dark:bg-zinc-900 w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-white/10 flex flex-col max-h-[80vh]">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary">local_activity</span>
+                        My Vouchers
+                    </h3>
+                    <button onClick={() => setShowVoucherModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                
+                <div className="overflow-y-auto no-scrollbar flex-1 -mx-2 px-2 pb-4">
+                    {isLoadingVouchers ? (
+                        <div className="py-8 text-center text-gray-500 font-medium">Loading vouchers...</div>
+                    ) : userVouchers.length === 0 ? (
+                        <div className="py-8 text-center text-gray-500 font-medium">You don't have any vouchers available right now.</div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            {userVouchers.map(v => {
+                                const isValid = cartTotal >= Number(v.min_spend);
+                                return (
+                                    <div 
+                                        key={v.id} 
+                                        onClick={() => {
+                                            if (isValid) {
+                                                setShowVoucherModal(false);
+                                                handleApplyVoucher(v.code);
+                                            }
+                                        }}
+                                        className={`relative border rounded-xl p-4 flex flex-col gap-2 transition-all ${
+                                            isValid 
+                                                ? 'bg-white dark:bg-zinc-800 border-primary/30 hover:border-primary cursor-pointer hover:shadow-md' 
+                                                : 'bg-gray-50 dark:bg-zinc-900/50 border-gray-200 dark:border-gray-800 opacity-60 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-extrabold text-lg text-primary">
+                                                    {v.type === 'fixed' ? `RM ${Number(v.discount_value).toFixed(0)} OFF` : `${v.discount_value}% OFF`}
+                                                </div>
+                                                <div className="text-xs font-bold text-gray-800 dark:text-gray-300 tracking-wider">
+                                                    {v.code}
+                                                </div>
+                                            </div>
+                                            {isValid && (
+                                                <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold">
+                                                    Use
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 flex justify-between items-end mt-1">
+                                            <div>
+                                                <div>Min Spend: RM {Number(v.min_spend).toFixed(2)}</div>
+                                                {v.max_discount && <div>Max Discount: RM {Number(v.max_discount).toFixed(2)}</div>}
+                                            </div>
+                                            {v.expires_at && (
+                                                <div className="font-semibold text-orange-600 dark:text-orange-400">
+                                                    Exp: {new Date(v.expires_at).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {!isValid && (
+                                            <div className="absolute inset-0 bg-white/50 dark:bg-black/50 backdrop-blur-[1px] rounded-xl flex items-center justify-center">
+                                                <div className="bg-gray-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg">
+                                                    Requires RM {Number(v.min_spend).toFixed(2)} Min Spend
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
              </div>
           </div>
