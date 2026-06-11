@@ -444,21 +444,23 @@ const Home: React.FC = () => {
         <div className="lg:hidden fixed bottom-[90px] left-4 right-4 z-[70] transition-all transform animate-in slide-in-from-bottom-5">
           <Link 
             to="/orders" 
-            className="flex items-center justify-between bg-primary text-background-dark p-3 rounded-2xl shadow-xl shadow-primary/20 border border-primary/20"
+            className="flex items-center justify-between bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)] border border-zinc-100 dark:border-zinc-800"
           >
-            <div className="flex items-center gap-3">
-              <div className="bg-background-dark/10 p-2 rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined font-bold text-background-dark text-[20px]">
+            <div className="flex items-center gap-4">
+              <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined font-bold text-primary text-[24px]">
                   {activeOrder.status === 'Rider OTW' || activeOrder.status === 'Out For Delivery' ? 'directions_bike' : 
                    activeOrder.status === 'Ready to Pickup' ? 'shopping_bag' : 'soup_kitchen'}
                 </span>
               </div>
-              <div>
-                <p className="font-extrabold text-sm">{getBannerText(activeOrder)}</p>
-                <p className="text-xs font-semibold opacity-90">Tap to track your order</p>
+              <div className="flex flex-col">
+                <p className="font-extrabold text-[15px] text-zinc-900 dark:text-white leading-tight mb-0.5">{getBannerText(activeOrder)}</p>
+                <p className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">Tap to track your order</p>
               </div>
             </div>
-            <span className="material-symbols-outlined font-bold">chevron_right</span>
+            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-full w-8 h-8 flex items-center justify-center shrink-0 ml-2">
+                <span className="material-symbols-outlined font-bold text-zinc-400 text-[20px]">chevron_right</span>
+            </div>
           </Link>
         </div>
       )}
