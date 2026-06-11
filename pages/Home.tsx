@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import { useCategories } from '../contexts/CategoryContext';
 import { useAuth } from '../contexts/AuthContext';
-import { MenuItem, ShopStatus } from '../types';
+import { MenuItem, ShopStatus, Order } from '../types';
 import { formatCurrency } from '../utils/currency';
 import AppHeader, { HeaderAvatarLink, HeaderCartLink } from '../components/AppHeader';
 import BrandLogo from '../components/BrandLogo';
@@ -36,6 +36,7 @@ const Home: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [shopStatus, setShopStatus] = useState<ShopStatus | null>(null);
   const [notice, setNotice] = useState<{ message: string; type: NoticeType } | null>(null);
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
   // Load Menu Items from backend API
   useEffect(() => {
@@ -70,12 +71,21 @@ const Home: React.FC = () => {
       window.clearInterval(intervalId);
     };
   }, []);
-
   useEffect(() => {
     if (!notice) return;
     const timeoutId = window.setTimeout(() => setNotice(null), 2200);
     return () => window.clearTimeout(timeoutId);
   }, [notice]);
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.getOrders()
+        .then(orders => {
+          const active = orders.find(o => o.status !== 'Completed' && o.status !== 'Cancelled');
+          setActiveOrder(active || null);
+        })
+        .catch(console.error);
+    }
+  }, [isAuthenticated]);
 
   const storefrontItems = useMemo(() => items.filter((item) => item.isActive), [items]);
 
@@ -410,6 +420,29 @@ const Home: React.FC = () => {
         </div>
       </footer>
       
+      {activeOrder && (
+        <div className="lg:hidden fixed bottom-[90px] left-4 right-4 z-[70] transition-all transform animate-in slide-in-from-bottom-5">
+          <Link 
+            to="/orders" 
+            className="flex items-center justify-between bg-primary text-background-dark p-3 rounded-2xl shadow-xl shadow-primary/20 border border-primary/20"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-background-dark/10 p-2 rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined font-bold text-background-dark text-[20px]">
+                  {activeOrder.status === 'Rider OTW' || activeOrder.status === 'Out For Delivery' ? 'directions_bike' : 
+                   activeOrder.status === 'Ready to Pickup' ? 'shopping_bag' : 'soup_kitchen'}
+                </span>
+              </div>
+              <div>
+                <p className="font-extrabold text-sm">{activeOrder.status}</p>
+                <p className="text-xs font-semibold opacity-90">Tap to track your order</p>
+              </div>
+            </div>
+            <span className="material-symbols-outlined font-bold">chevron_right</span>
+          </Link>
+        </div>
+      )}
+
       <UserMobileTabBar />
     </div>
   );
