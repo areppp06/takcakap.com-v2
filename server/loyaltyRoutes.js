@@ -22,10 +22,14 @@ module.exports = (requireAuth, requireAdmin) => {
 
     router.get('/user/vouchers', requireAuth, async (req, res) => {
         try {
-            const [vouchers] = await db.query(
-                `SELECT * FROM vouchers WHERE user_id = ? ORDER BY created_at DESC`,
-                [req.user.id]
-            );
+            const { activeOnly } = req.query;
+            let query = `SELECT * FROM vouchers WHERE user_id = ?`;
+            if (activeOnly === 'true') {
+                query += ` AND is_active = TRUE AND is_redeemed = FALSE AND (expires_at IS NULL OR expires_at > NOW())`;
+            }
+            query += ` ORDER BY created_at DESC LIMIT 200`;
+            
+            const [vouchers] = await db.query(query, [req.user.id]);
             res.json(vouchers);
         } catch (err) {
             console.error('Error fetching user vouchers:', err);

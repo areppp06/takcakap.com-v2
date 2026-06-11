@@ -240,7 +240,7 @@ const Checkout: React.FC = () => {
         setIsLoadingVouchers(true);
         const [pointsRes, vouchersRes] = await Promise.all([
           fetch('/api/user/points', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } })
+          fetch('/api/user/vouchers?activeOnly=true', { headers: { Authorization: `Bearer ${token}` } })
         ]);
         if (pointsRes.ok) {
           const data = await pointsRes.json();
