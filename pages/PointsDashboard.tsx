@@ -207,13 +207,23 @@ export default function PointsDashboard() {
 
                 {/* Right Column: Points History Sidebar */}
                 <div className="w-full lg:w-80 lg:sticky lg:top-24 self-start">
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col max-h-[600px] lg:max-h-[calc(100vh-160px)]">
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col max-h-[600px] lg:max-h-[calc(100vh-160px)] relative overflow-hidden">
                         <h2 className="text-lg font-bold mb-4 text-gray-900 shrink-0">Points History</h2>
                         {transactions.length === 0 ? (
                             <p className="text-gray-500 text-sm">No recent transactions.</p>
                         ) : (
                             <>
-                                <div className="overflow-y-auto flex-1 no-scrollbar pr-1 pb-2">
+                                <div 
+                                    className="overflow-y-auto flex-1 no-scrollbar pr-1 pb-4"
+                                    onScroll={(e) => {
+                                        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+                                        if (scrollHeight - scrollTop <= clientHeight + 40) {
+                                            if (hasMoreHistory) {
+                                                setHistoryVisibleCount(v => v + HISTORY_PER_PAGE);
+                                            }
+                                        }
+                                    }}
+                                >
                                     <div className="relative border-l border-gray-200 ml-2 space-y-6">
                                         {currentTransactions.map((tx) => {
                                             const isPositive = tx.points > 0;
@@ -231,15 +241,7 @@ export default function PointsDashboard() {
                                     </div>
                                 </div>
                                 {hasMoreHistory && (
-                                    <div className="pt-4 mt-2 border-t border-gray-100 shrink-0 relative">
-                                        <div className="absolute bottom-full mb-0 inset-x-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
-                                        <button 
-                                            onClick={() => setHistoryVisibleCount(v => v + HISTORY_PER_PAGE)}
-                                            className="w-full py-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-sm transition-colors border border-gray-200"
-                                        >
-                                            Load More
-                                        </button>
-                                    </div>
+                                    <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none"></div>
                                 )}
                             </>
                         )}
