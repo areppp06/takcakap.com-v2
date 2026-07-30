@@ -21,21 +21,66 @@ if (publicVapidKey && privateVapidKey) {
     console.warn('⚠️ VAPID keys not found. Web Push notifications will not work.');
 }
 
+/**
+ * Resolve Firebase service account credentials without committing secrets to git.
+ * Priority:
+ * 1) FIREBASE_SERVICE_ACCOUNT_JSON — raw JSON string (or base64 of JSON)
+ * 2) GOOGLE_APPLICATION_CREDENTIALS — absolute/relative path to a JSON key file
+ * 3) Legacy local file server/firebase-service-account.json (dev only; must not be committed)
+ */
+const resolveFirebaseServiceAccount = () => {
+    const rawJson = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+    if (rawJson) {
+        try {
+            if (rawJson.startsWith('{')) {
+                return JSON.parse(rawJson);
+            }
+            const decoded = Buffer.from(rawJson, 'base64').toString('utf8');
+            return JSON.parse(decoded);
+        } catch (err) {
+            throw new Error(`FIREBASE_SERVICE_ACCOUNT_JSON is invalid JSON: ${err.message}`);
+        }
+    }
+
+    const credentialsPath = String(process.env.GOOGLE_APPLICATION_CREDENTIALS || '').trim();
+    if (credentialsPath) {
+        const resolved = path.isAbsolute(credentialsPath)
+            ? credentialsPath
+            : path.resolve(process.cwd(), credentialsPath);
+        if (!fs.existsSync(resolved)) {
+            throw new Error(`GOOGLE_APPLICATION_CREDENTIALS file not found: ${resolved}`);
+        }
+        return JSON.parse(fs.readFileSync(resolved, 'utf8'));
+    }
+
+    const legacyPath = path.resolve(__dirname, 'firebase-service-account.json');
+    if (fs.existsSync(legacyPath)) {
+        console.warn(
+            '⚠️ Loading Firebase credentials from server/firebase-service-account.json (legacy). Prefer FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS and do not commit this file.'
+        );
+        return JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+    }
+
+    return null;
+};
+
 // Initialize Firebase Admin (for the Android wrapper app)
 let firebaseApp = null;
 try {
-    const serviceAccountPath = path.resolve(__dirname, 'firebase-service-account.json');
-    if (fs.existsSync(serviceAccountPath)) {
-        const serviceAccount = require(serviceAccountPath);
+    const serviceAccount = resolveFirebaseServiceAccount();
+    if (serviceAccount) {
         firebaseApp = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
-        console.log('✅ Firebase Admin initialized with service account.');
+        console.log('✅ Firebase Admin initialized with service account credentials.');
     } else if (process.env.FCM_SERVER_KEY) {
-        // Fallback or explicit warning
-        console.warn('⚠️ Found FCM_SERVER_KEY but firebase-admin requires a service account JSON for proper initialization. Please provide firebase-service-account.json');
+        console.warn(
+            '⚠️ Found FCM_SERVER_KEY but firebase-admin requires a service account. Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS.'
+        );
     } else {
-        console.warn('⚠️ firebase-service-account.json not found. Admin app FCM push notifications will not work.');
+        console.warn(
+            '⚠️ Firebase credentials not configured. Admin app FCM push notifications will not work.'
+        );
     }
 } catch (e) {
     console.error('Failed to initialize Firebase Admin:', e.message);
@@ -43,7 +88,7 @@ try {
 
 /**
  * Sends a push notification to all subscribed devices for a specific user (Web Push).
- * 
+ *
  * @param {number} userId - The ID of the user to send the notification to.
  * @param {string} title - Notification title.
  * @param {string} body - Notification body.
@@ -96,7 +141,7 @@ async function sendPushToUser(userId, title, body, url = '/') {
 /**
  * Broadcasts an FCM push notification to all registered admin devices.
  * Used for the Android wrapper app to trigger its repeating alarm.
- * 
+ *
  * @param {string} title - Notification title
  * @param {string} body - Notification body
  * @param {object} data - Extra payload data (e.g., type: 'new_order')
@@ -139,7 +184,7 @@ async function sendFcmToAdmins(title, body, data = {}) {
         const response = await admin.messaging().sendEachForMulticast(message);
 
         console.log(`📤 sendFcmToAdmins: Results — success: ${response.successCount}, failures: ${response.failureCount}`);
-        
+
         // Log each individual result
         response.responses.forEach((resp, idx) => {
             if (resp.success) {

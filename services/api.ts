@@ -453,6 +453,21 @@ export const api = {
                 method: 'POST'
             }
         ),
+    retryAdminOrderDispatch: async (id: string) =>
+        request<{
+            success: boolean;
+            orderId: string;
+            externalOrderId?: string | null;
+            trackingUrl?: string | null;
+            status?: string;
+            deliveryBookingStatus?: string;
+            feeWarning?: string;
+        }>(
+            adminApiPath(`/admin/orders/${id}/retry-dispatch`),
+            {
+                method: 'POST'
+            }
+        ),
     refundAdminOrder: async (id: string, payload?: { amount?: number; reason?: string }) =>
         request<{
             success: boolean;
@@ -625,5 +640,114 @@ export const api = {
         request<{ success: boolean }>(
             '/cart/clear',
             { method: 'DELETE' }
-        )
+        ),
+
+    // --- Loyalty / points / vouchers ---
+    getUserPoints: async (params?: { page?: number; limit?: number }) =>
+        request<{
+            balance: number;
+            debtPoints?: number;
+            debtMessage?: string | null;
+            transactions: any[];
+            totalTransactions: number;
+            cooldownLimitHours?: number;
+            cooldownEndsAt?: string;
+        }>('/user/points', undefined, params),
+    getUserPointTiers: async (): Promise<Array<{ id: number; points_required: number; discount_amount: number }>> =>
+        request('/user/points/tiers'),
+    redeemUserPoints: async (points: number) =>
+        request<{ success: boolean; code: string; discountValue: number }>(
+            '/user/points/redeem',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ points })
+            }
+        ),
+    getUserVouchers: async (params?: { activeOnly?: boolean }) =>
+        request<any[]>('/user/vouchers', undefined, {
+            activeOnly: params?.activeOnly ? 'true' : undefined
+        }),
+    validateUserVoucher: async (payload: { code: string; subtotal?: number }) =>
+        request<{ valid: boolean; voucher: any }>(
+            '/user/vouchers/validate',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }
+        ),
+    getUserVoucherSavings: async () =>
+        request<{ totalSaved: number }>('/user/vouchers/savings'),
+
+    getAdminPointsSettings: async () =>
+        request<{ voucher_cooldown_hours: number }>(adminApiPath('/admin/points/settings')),
+    updateAdminPointsSettings: async (payload: { voucher_cooldown_hours: number }) =>
+        request<{ success: boolean }>(adminApiPath('/admin/points/settings'), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }),
+    getAdminPointTiers: async () =>
+        request<any[]>(adminApiPath('/admin/points/tiers')),
+    createAdminPointTier: async (payload: {
+        points_required: number;
+        discount_amount: number;
+        is_active?: boolean;
+    }) =>
+        request<{ success: boolean }>(adminApiPath('/admin/points/tiers'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }),
+    updateAdminPointTier: async (
+        id: number | string,
+        payload: { points_required: number; discount_amount: number; is_active?: boolean }
+    ) =>
+        request<{ success: boolean }>(adminApiPath(`/admin/points/tiers/${id}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }),
+    deleteAdminPointTier: async (id: number | string) =>
+        request<{ success: boolean }>(adminApiPath(`/admin/points/tiers/${id}`), {
+            method: 'DELETE'
+        }),
+    getAdminPointsUsers: async (params?: { page?: number; limit?: number }) =>
+        request<{ users: any[]; total: number; totalPages: number }>(
+            adminApiPath('/admin/points/users'),
+            undefined,
+            params
+        ),
+    adjustAdminPoints: async (payload: {
+        userId: number | string;
+        points: number;
+        action: 'add' | 'deduct';
+        description?: string;
+    }) =>
+        request<{ success: boolean }>(adminApiPath('/admin/points/adjust'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }),
+    getAdminPointsStats: async () =>
+        request<any>(adminApiPath('/admin/points/stats')),
+    getAdminVouchers: async (params?: Record<string, string | number | undefined>) =>
+        request<any>(adminApiPath('/admin/vouchers'), undefined, params),
+    getAdminVoucherStats: async () =>
+        request<any>(adminApiPath('/admin/vouchers/stats')),
+    createAdminVoucher: async (payload: Record<string, unknown>) =>
+        request<{ success: boolean }>(adminApiPath('/admin/vouchers'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }),
+    toggleAdminVoucher: async (id: number | string) =>
+        request<{ success: boolean }>(adminApiPath(`/admin/vouchers/${id}/toggle`), {
+            method: 'PUT'
+        }),
+    deleteAdminVoucher: async (id: number | string) =>
+        request<{ success: boolean }>(adminApiPath(`/admin/vouchers/${id}/delete`), {
+            method: 'PUT'
+        })
 };

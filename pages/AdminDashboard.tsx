@@ -76,14 +76,7 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     const loadVoucherStats = async () => {
       try {
-        const token = localStorage.getItem('takcakap_auth_token');
-        if (!token) return;
-        const res = await fetch('/api/admin/vouchers/stats', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          setVoucherStats(await res.json());
-        }
+        setVoucherStats(await api.getAdminVoucherStats());
       } catch (error) {
         console.error('Failed to fetch voucher stats', error);
       }

@@ -152,7 +152,6 @@ const Home: React.FC = () => {
     { name: 'Visa', src: 'https://down-my.img.susercontent.com/file/735e9b602704f9fcecc0fc589358d5df', className: 'h-6' },
     { name: 'Mastercard', src: 'https://down-my.img.susercontent.com/file/8612df33671e5fcf4e3896dddc09126f', className: 'h-6' },
     { name: 'FPX', src: 'https://down-my.img.susercontent.com/file/be96ecd1fe21e89d006f285bae7db4ee', className: 'h-6' },
-    { name: 'DuitNow', src: 'https://down-my.img.susercontent.com/file/2b9fdf2b116defb1373ec0ca833b622e', className: 'h-6' },
     { name: 'Additional Payment', src: 'https://down-my.img.susercontent.com/file/2d504b9eaad31ffb9d9a5070a7f3207b', className: 'h-6' }
   ];
 

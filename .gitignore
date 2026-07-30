@@ -27,3 +27,10 @@ dist-ssr
 foodidash-takcakap-android-app-v2/
 takcakap-admin-apk/
 *.apk
+
+# Secrets — never commit service account keys
+.env
+server/firebase-service-account.json
+**/firebase-service-account.json
+*service-account*.json
+*firebase*adminsdk*.json

@@ -6,23 +6,26 @@ type AdminSidebarNavProps = {
 };
 
 const NAV_ITEMS = [
-  { to: '/admin', label: 'Dashboard', icon: 'dashboard' },
-  { to: '/admin/orders', label: 'Orders', icon: 'receipt_long' },
-  { to: '/admin/categories', label: 'Categories', icon: 'category' },
-  { to: '/admin/menu', label: 'Menus', icon: 'menu_book' },
-  { to: '/admin/delivery-options', label: 'Delivery', icon: 'local_shipping' },
-  { to: '/admin/manage-shop', label: 'Manage Shop', icon: 'storefront' },
-  { to: '/admin/customers', label: 'Customers', icon: 'groups' },
-  { to: '/admin/payment-options', label: 'Payment', icon: 'qr_code_2' },
-  { to: '/admin/points', label: 'Points', icon: 'stars' },
-  { to: '/admin/vouchers', label: 'Vouchers', icon: 'local_activity' }
+  { to: '/', label: 'Dashboard', icon: 'dashboard' },
+  { to: '/orders', label: 'Orders', icon: 'receipt_long' },
+  { to: '/categories', label: 'Categories', icon: 'category' },
+  { to: '/menu', label: 'Menus', icon: 'menu_book' },
+  { to: '/delivery-options', label: 'Delivery', icon: 'local_shipping' },
+  { to: '/manage-shop', label: 'Manage Shop', icon: 'storefront' },
+  { to: '/customers', label: 'Customers', icon: 'groups' },
+  { to: '/payment-options', label: 'Payment', icon: 'payments' },
+  { to: '/points', label: 'Points', icon: 'stars' },
+  { to: '/vouchers', label: 'Vouchers', icon: 'local_activity' }
 ];
 
 const AdminSidebarNav: React.FC<AdminSidebarNavProps> = ({ currentPath }) => {
   return (
     <nav className="flex-1 px-4 space-y-2 mt-4">
       {NAV_ITEMS.map((item) => {
-        const active = currentPath === item.to;
+        const active =
+          item.to === '/'
+            ? currentPath === '/' || currentPath === '/admin'
+            : currentPath === item.to || currentPath.startsWith(`${item.to}/`);
         return (
           <Link
             key={item.to}

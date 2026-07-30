@@ -24,7 +24,7 @@ declare global {
   }
 }
 
-type CheckoutPaymentMethod = 'DuitNow' | 'Curlec';
+type CheckoutPaymentMethod = 'Curlec';
 type CheckoutOrderPayload = CreateOrderPayload & {
   paymentMethod: CheckoutPaymentMethod;
 };
@@ -162,11 +162,10 @@ const Checkout: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const activeUser = user || currentUser;
-  const duitNowLogoUrl = import.meta.env.VITE_DUITNOW_LOGO_URL || '/duitnow-logo.png';
-  
+
   // Cart State from Context
   const { cart, cartTotal, cartCount, isLoading: isCartLoading, updateQuantity, removeFromCart, clearCart } = useCart();
-  
+
   const [orderType, setOrderType] = useState<'Pickup' | 'Delivery'>('Pickup');
   const [deliveryTiming, setDeliveryTiming] = useState<'NOW' | 'SCHEDULED'>('NOW');
   const [scheduledTimeSlot, setScheduledTimeSlot] = useState('');
@@ -179,7 +178,7 @@ const Checkout: React.FC = () => {
   const [shopStatus, setShopStatus] = useState<ShopStatus | null>(null);
   const storeName = shopStatus?.storeName || 'TakCakap HQ';
   const storeAddress = shopStatus?.storeAddress || 'Kuala Lumpur, Malaysia';
-  
+
   // Address State from Context
   const { addresses, isLoading: isAddressesLoading, addAddress, deleteAddress } = useAddresses();
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -187,9 +186,7 @@ const Checkout: React.FC = () => {
   const [isQuoting, setIsQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState('');
   const [paymentOptions, setPaymentOptions] = useState<PaymentOptions>({
-    duitnowQrUrl: import.meta.env.VITE_DUITNOW_QR_URL || '',
-    duitnowEnabled: true,
-    curlecEnabled: false,
+    curlecEnabled: true,
     serviceFee: 1.8,
     curlecConfigured: false,
     curlecKeyId: '',
@@ -197,7 +194,7 @@ const Checkout: React.FC = () => {
     curlecDescription: 'Secure online payment via Curlec'
   });
   const [isLoadingPaymentOptions, setIsLoadingPaymentOptions] = useState(true);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<CheckoutPaymentMethod>('DuitNow');
+  const selectedPaymentMethod: CheckoutPaymentMethod = 'Curlec';
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   // Voucher State
@@ -234,27 +231,21 @@ const Checkout: React.FC = () => {
 
   useEffect(() => {
     const loadPointsAndVouchers = async () => {
-      const token = localStorage.getItem('takcakap_auth_token');
-      if (!token) return;
+      if (!isAuthenticated) return;
       try {
         setIsLoadingVouchers(true);
-        const [pointsRes, vouchersRes] = await Promise.all([
-          fetch('/api/user/points', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/user/vouchers?activeOnly=true', { headers: { Authorization: `Bearer ${token}` } })
+        const [pointsData, vData] = await Promise.all([
+          api.getUserPoints({ page: 1, limit: 1 }),
+          api.getUserVouchers({ activeOnly: true })
         ]);
-        if (pointsRes.ok) {
-          const data = await pointsRes.json();
-          setUserPoints(data.balance || 0);
-        }
-        if (vouchersRes.ok) {
-          const vData = await vouchersRes.json();
-          const validVouchers = vData.filter((v: any) => 
-            v.is_active && 
-            !v.is_redeemed && 
+        setUserPoints(pointsData.balance || 0);
+        const validVouchers = (vData || []).filter(
+          (v: any) =>
+            v.is_active &&
+            !v.is_redeemed &&
             (!v.expires_at || new Date(v.expires_at) > new Date())
-          );
-          setUserVouchers(validVouchers);
-        }
+        );
+        setUserVouchers(validVouchers);
       } catch (err) {
         console.error('Failed to load points and vouchers', err);
       } finally {
@@ -293,7 +284,6 @@ const Checkout: React.FC = () => {
         console.error('Failed to load payment options', error);
         setPaymentOptions((prev) => ({
           ...prev,
-          duitnowEnabled: true,
           curlecEnabled: false,
           curlecConfigured: false,
           curlecKeyId: ''
@@ -341,8 +331,7 @@ const Checkout: React.FC = () => {
   const noDeliveryMethodAvailable = !isLoadingDeliveryOptions && !deliveryOptions.pickupEnabled && !deliveryOptions.lalamoveEnabled;
   const curlecAvailable = paymentOptions.curlecEnabled && paymentOptions.curlecConfigured;
   const configuredServiceFee = Math.max(0, Number(paymentOptions.serviceFee || 0));
-  const noPaymentMethodAvailable =
-    !isLoadingPaymentOptions && !paymentOptions.duitnowEnabled && !curlecAvailable;
+  const noPaymentMethodAvailable = !isLoadingPaymentOptions && !curlecAvailable;
 
   useEffect(() => {
     if (isLoadingDeliveryOptions) return;
@@ -354,17 +343,6 @@ const Checkout: React.FC = () => {
       setOrderType('Pickup');
     }
   }, [orderType, deliveryOptions, isLoadingDeliveryOptions]);
-
-  useEffect(() => {
-    if (isLoadingPaymentOptions) return;
-    if (selectedPaymentMethod === 'DuitNow' && !paymentOptions.duitnowEnabled && curlecAvailable) {
-      setSelectedPaymentMethod('Curlec');
-      return;
-    }
-    if (selectedPaymentMethod === 'Curlec' && !curlecAvailable && paymentOptions.duitnowEnabled) {
-      setSelectedPaymentMethod('DuitNow');
-    }
-  }, [selectedPaymentMethod, paymentOptions, curlecAvailable, isLoadingPaymentOptions]);
 
   useEffect(() => {
     if (orderType !== 'Delivery') {
@@ -518,14 +496,7 @@ const Checkout: React.FC = () => {
     setIsApplyingVoucher(true);
     setVoucherError('');
     try {
-        const token = localStorage.getItem('takcakap_auth_token');
-        const response = await fetch('/api/user/vouchers/validate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ code: code, subtotal: cartTotal })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to apply voucher');
+        const data = await api.validateUserVoucher({ code, subtotal: cartTotal });
         setAppliedVoucher(data.voucher);
         setVoucherCodeInput(code);
     } catch (err: any) {
@@ -656,16 +627,8 @@ const Checkout: React.FC = () => {
           alert('All delivery methods are unavailable for now. Please try again later.');
           return;
       }
-      if (noPaymentMethodAvailable) {
-          alert('All payment methods are currently unavailable. Please try again later.');
-          return;
-      }
-      if (selectedPaymentMethod === 'DuitNow' && !paymentOptions.duitnowEnabled) {
-          alert('DuitNow is currently unavailable. Please choose Curlec.');
-          return;
-      }
-      if (selectedPaymentMethod === 'Curlec' && !curlecAvailable) {
-          alert('Curlec is currently unavailable. Please choose DuitNow.');
+      if (noPaymentMethodAvailable || !curlecAvailable) {
+          alert('Online payment (Curlec) is currently unavailable. Please try again later.');
           return;
       }
       if (orderType === 'Pickup' && !deliveryOptions.pickupEnabled) {
@@ -745,7 +708,7 @@ const Checkout: React.FC = () => {
           quotationStops: deliveryQuote?.stops || [],
           deliveryTiming,
           scheduledAtUtc: scheduledAtUtc || undefined,
-          paymentMethod: selectedPaymentMethod,
+          paymentMethod: 'Curlec',
           voucherCode: appliedVoucher?.code,
           recipient: {
               name: activeUser.name,
@@ -753,11 +716,6 @@ const Checkout: React.FC = () => {
               remarks: selectedAddress?.note || ''
           }
       };
-
-      if (selectedPaymentMethod === 'DuitNow') {
-          navigate('/scan-pay', { state: orderDetails });
-          return;
-      }
 
       try {
           setIsSubmittingPayment(true);
@@ -1188,53 +1146,16 @@ const Checkout: React.FC = () => {
                      <>
                        {noPaymentMethodAvailable && (
                          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                           All payment methods are currently unavailable.
+                           Online payment is currently unavailable.
                          </div>
                        )}
-                       <div className="grid sm:grid-cols-2 gap-3">
-                         <button
-                           type="button"
-                           onClick={() => paymentOptions.duitnowEnabled && setSelectedPaymentMethod('DuitNow')}
-                           disabled={!paymentOptions.duitnowEnabled}
+                       <div className="grid sm:grid-cols-1 gap-3">
+                         <div
                            className={`p-4 rounded-xl border-2 text-left transition-all ${
-                             selectedPaymentMethod === 'DuitNow'
+                             curlecAvailable
                                ? 'border-primary bg-white dark:bg-zinc-800 shadow-sm ring-4 ring-primary/10'
-                               : 'border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900'
-                           } ${!paymentOptions.duitnowEnabled ? 'opacity-55 cursor-not-allowed' : ''}`}
-                         >
-                           <div className="flex items-start justify-between gap-2">
-                             <div className="flex items-center gap-3">
-                               <div className="h-10 w-10 rounded-lg bg-white border border-gray-100 p-1 shadow-sm flex items-center justify-center">
-                                 <img
-                                   src={duitNowLogoUrl}
-                                   alt="DuitNow"
-                                   className="h-full w-full object-contain"
-                                 />
-                               </div>
-                               <div>
-                                 <p className="font-bold">DuitNow / Scan &amp; Pay</p>
-                                 <p className="text-xs text-gray-500 dark:text-gray-400">Manual QR payment</p>
-                               </div>
-                             </div>
-                             <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                               paymentOptions.duitnowEnabled
-                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                 : 'bg-gray-100 text-gray-500 border border-gray-200'
-                             }`}>
-                               {paymentOptions.duitnowEnabled ? 'Enabled' : 'Disabled'}
-                             </span>
-                           </div>
-                         </button>
-
-                         <button
-                           type="button"
-                           onClick={() => curlecAvailable && setSelectedPaymentMethod('Curlec')}
-                           disabled={!curlecAvailable}
-                           className={`p-4 rounded-xl border-2 text-left transition-all ${
-                             selectedPaymentMethod === 'Curlec'
-                               ? 'border-primary bg-white dark:bg-zinc-800 shadow-sm ring-4 ring-primary/10'
-                               : 'border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900'
-                           } ${!curlecAvailable ? 'opacity-55 cursor-not-allowed' : ''}`}
+                               : 'border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 opacity-55'
+                           }`}
                          >
                            <div className="flex items-start justify-between gap-2">
                              <div>
@@ -1254,7 +1175,7 @@ const Checkout: React.FC = () => {
                                {curlecAvailable ? 'Enabled' : paymentOptions.curlecEnabled ? 'Not Configured' : 'Disabled'}
                              </span>
                            </div>
-                         </button>
+                         </div>
                        </div>
                      </>
                    )}
@@ -1433,8 +1354,7 @@ const Checkout: React.FC = () => {
                             isLoadingPaymentOptions ||
                             noDeliveryMethodAvailable ||
                             noPaymentMethodAvailable ||
-                            (selectedPaymentMethod === 'DuitNow' && !paymentOptions.duitnowEnabled) ||
-                            (selectedPaymentMethod === 'Curlec' && !curlecAvailable) ||
+                            !curlecAvailable ||
                             (orderType === 'Pickup' && pickupDisabled) ||
                             (orderType === 'Delivery' &&
                               (lalamoveDisabled ||

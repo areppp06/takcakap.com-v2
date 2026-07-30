@@ -10,9 +10,7 @@ import AdminSidebarFooter from '../components/AdminSidebarFooter';
 type NoticeType = 'success' | 'error';
 
 const AdminPaymentOptions: React.FC = () => {
-  const [duitnowEnabled, setDuitnowEnabled] = useState(true);
-  const [duitnowQrUrl, setDuitnowQrUrl] = useState('');
-  const [curlecEnabled, setCurlecEnabled] = useState(false);
+  const [curlecEnabled, setCurlecEnabled] = useState(true);
   const [curlecConfigured, setCurlecConfigured] = useState(false);
   const [curlecKeyId, setCurlecKeyId] = useState('');
   const [curlecDisplayName, setCurlecDisplayName] = useState('Online Payment');
@@ -32,8 +30,6 @@ const AdminPaymentOptions: React.FC = () => {
     setIsLoading(true);
     try {
       const options = await api.getAdminPaymentOptions();
-      setDuitnowEnabled(Boolean(options.duitnowEnabled));
-      setDuitnowQrUrl(options.duitnowQrUrl || '');
       setCurlecEnabled(Boolean(options.curlecEnabled));
       setCurlecConfigured(Boolean(options.curlecConfigured));
       setCurlecKeyId(options.curlecKeyId || '');
@@ -58,11 +54,6 @@ const AdminPaymentOptions: React.FC = () => {
   }, [notice]);
 
   const handleSave = async () => {
-    const trimmedQrUrl = duitnowQrUrl.trim();
-    if (duitnowEnabled && !trimmedQrUrl) {
-      showNotice('DuitNow QR image URL is required when DuitNow is enabled.', 'error');
-      return;
-    }
     const parsedServiceFee = Number(serviceFeeInput);
     if (!Number.isFinite(parsedServiceFee)) {
       showNotice('Service fee must be a valid number.', 'error');
@@ -80,25 +71,10 @@ const AdminPaymentOptions: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const payload: {
-        duitnowEnabled: boolean;
-        curlecEnabled: boolean;
-        duitnowQrUrl?: string;
-        serviceFee: number;
-      } = {
-        duitnowEnabled,
+      const response = await api.updateAdminPaymentOptions({
         curlecEnabled,
         serviceFee: normalizedServiceFee
-      };
-      if (trimmedQrUrl) {
-        payload.duitnowQrUrl = trimmedQrUrl;
-      }
-
-      const response = await api.updateAdminPaymentOptions({
-        ...payload
       });
-      setDuitnowEnabled(Boolean(response.duitnowEnabled));
-      setDuitnowQrUrl(response.duitnowQrUrl || trimmedQrUrl);
       setCurlecEnabled(Boolean(response.curlecEnabled));
       setCurlecConfigured(Boolean(response.curlecConfigured));
       setCurlecKeyId(response.curlecKeyId || '');
@@ -115,7 +91,7 @@ const AdminPaymentOptions: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/admin/login', { replace: true });
+    navigate('/login', { replace: true });
   };
 
   const maskedCurlecKeyId = curlecKeyId
@@ -171,7 +147,7 @@ const AdminPaymentOptions: React.FC = () => {
         <header className="mb-8">
           <h2 className="text-3xl font-extrabold tracking-tight">Payment Options</h2>
           <p className="text-slate-500">
-            Enable or disable each checkout method and keep customer payment UX consistent.
+            Curlec is the only supported checkout method. Configure service fee and enable/disable online payment.
           </p>
         </header>
 
@@ -180,77 +156,31 @@ const AdminPaymentOptions: React.FC = () => {
             <div className="text-sm text-slate-500">Loading options...</div>
           ) : (
             <>
-              <div className="space-y-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">Checkout Methods</p>
-
-                <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-4 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-bold">DuitNow Scan &amp; Pay</p>
-                    <p className="text-sm text-slate-500">Manual QR scan payment page for customers.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDuitnowEnabled((prev) => !prev)}
-                    className={`h-7 w-14 rounded-full transition-colors relative ${duitnowEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                    aria-label="Toggle DuitNow"
-                    aria-pressed={duitnowEnabled}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                        duitnowEnabled ? 'translate-x-7' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-4 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-bold">{curlecDisplayName || 'Online Payment'} Hosted Checkout</p>
-                    <p className="text-sm text-slate-500">
-                      Supports FPX, cards and eWallet methods based on your Curlec account setup.
+              <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-4 flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-bold">{curlecDisplayName || 'Online Payment'} (Curlec)</p>
+                  <p className="text-sm text-slate-500">
+                    FPX, cards and eWallet methods based on your Curlec account setup.
+                  </p>
+                  {!curlecConfigured && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      Curlec keys are not configured on the server. Checkout will fail until configured.
                     </p>
-                    {!curlecConfigured && (
-                      <p className="text-xs text-amber-700 mt-1">
-                        Curlec keys are not configured on server. Enable will not be effective until configured.
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCurlecEnabled((prev) => !prev)}
-                    className={`h-7 w-14 rounded-full transition-colors relative ${curlecEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                    aria-label="Toggle Curlec"
-                    aria-pressed={curlecEnabled}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                        curlecEnabled ? 'translate-x-7' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
+                  )}
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="duitnowQrUrl" className="text-sm font-bold">
-                  DuitNow QR Image URL
-                </label>
-                <input
-                  id="duitnowQrUrl"
-                  type="url"
-                  value={duitnowQrUrl}
-                  onChange={(e) => setDuitnowQrUrl(e.target.value)}
-                  placeholder="https://..."
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-                    duitnowEnabled
-                      ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-                      : 'border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-slate-400'
-                  }`}
-                  disabled={!duitnowEnabled}
-                />
-                <p className="text-xs text-slate-500">
-                  This QR image is shown to customers on the Scan &amp; Pay page.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setCurlecEnabled((prev) => !prev)}
+                  className={`h-7 w-14 rounded-full transition-colors relative ${curlecEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                  aria-label="Toggle Curlec"
+                  aria-pressed={curlecEnabled}
+                >
+                  <span
+                    className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                      curlecEnabled ? 'translate-x-7' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="space-y-2">
@@ -276,49 +206,27 @@ const AdminPaymentOptions: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-3">DuitNow Preview</p>
-                  <div className="bg-white rounded-xl border border-gray-100 p-4 inline-flex">
-                    {duitnowQrUrl ? (
-                      <img
-                        src={duitnowQrUrl}
-                        alt="DuitNow QR Preview"
-                        className="w-44 h-44 object-contain"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-44 h-44 grid place-items-center text-xs text-slate-500">
-                        No preview
-                      </div>
-                    )}
-                  </div>
+              <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-4 space-y-3 max-w-md">
+                <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">Curlec Status</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Server keys</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      curlecConfigured
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}
+                  >
+                    {curlecConfigured ? 'Configured' : 'Missing'}
+                  </span>
                 </div>
-
-                <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-4 space-y-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">Curlec Status</p>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500">Server keys</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                        curlecConfigured
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}
-                    >
-                      {curlecConfigured ? 'Configured' : 'Missing'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500">Public key</span>
-                    <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{maskedCurlecKeyId}</span>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Configure `CURLEC_KEY_ID` and `CURLEC_KEY_SECRET` in your backend environment to activate hosted checkout.
-                  </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Public key</span>
+                  <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{maskedCurlecKeyId}</span>
                 </div>
+                <p className="text-xs text-slate-500">
+                  Configure `CURLEC_KEY_ID` and `CURLEC_KEY_SECRET` in your backend environment.
+                </p>
               </div>
 
               <div className="pt-2 flex justify-end">

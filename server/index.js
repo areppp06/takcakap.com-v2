@@ -22,6 +22,7 @@ const db = require('./db');
 const lalamoveService = require('./lalamoveService');
 const emailService = require('./emailService');
 const loyaltyService = require('./loyaltyService');
+const refundService = require('./services/refundService');
 const { assertNoPendingMigrations } = require('./migrationRunner');
 const { sendPushToUser, sendFcmToAdmins } = require('./pushService');
 const multer = require('multer');
@@ -65,15 +66,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || 'admin@takcakap.com').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
 const ADMIN_NAME = String(process.env.ADMIN_NAME || 'TakCakap Admin').trim();
-const PAYMENT_METHOD_DUITNOW = 'DuitNow';
 const PAYMENT_METHOD_CURLEC = 'Curlec';
-const ALLOW_UNVERIFIED_DUITNOW_ORDERS = String(process.env.ALLOW_UNVERIFIED_DUITNOW_ORDERS || 'false')
-    .trim()
-    .toLowerCase() === 'true';
-const DEFAULT_DUITNOW_QR_URL = String(
-    process.env.DUITNOW_QR_URL ||
-    'https://res.cloudinary.com/dzayh29d7/image/upload/v1770301357/KC_QR_vljdez.png'
-).trim();
 const parsedDefaultServiceFee = Number.parseFloat(String(process.env.DEFAULT_SERVICE_FEE ?? '1.8'));
 const DEFAULT_SERVICE_FEE = Math.max(0, Number.isFinite(parsedDefaultServiceFee) ? parsedDefaultServiceFee : 1.8);
 const CURLEC_API_BASE_URL = String(process.env.CURLEC_API_BASE_URL || 'https://api.razorpay.com/v1')
@@ -566,7 +559,7 @@ const formatOrderRowForClient = (o) => {
         trackingUrl: o.tracking_url,
         driverId: o.driver_id,
         lalamoveStatus: o.lalamove_status,
-        paymentMethod: o.payment_method || PAYMENT_METHOD_DUITNOW,
+        paymentMethod: o.payment_method || PAYMENT_METHOD_CURLEC,
         refundStatus: refundStatus || undefined,
         refundAmount: o.refund_amount !== null ? parseFloat(o.refund_amount) : undefined,
         refundId: o.refund_id || undefined,
@@ -589,9 +582,32 @@ const formatOrderRowForClient = (o) => {
             String(o.delivery_timing || ORDER_DELIVERY_TIMING_NOW).toUpperCase() === ORDER_DELIVERY_TIMING_SCHEDULED
                 ? ORDER_DELIVERY_TIMING_SCHEDULED
                 : ORDER_DELIVERY_TIMING_NOW,
+        deliveryBookingStatus: o.delivery_booking_status || undefined,
+        deliveryBookingError: o.delivery_booking_error || undefined,
+        deliveryBookingAttempts:
+            o.delivery_booking_attempts !== undefined && o.delivery_booking_attempts !== null
+                ? Number(o.delivery_booking_attempts)
+                : undefined,
+        canRetryDispatch: canRetryLalamoveDispatch(o),
         ...cancelState
     };
 };
+
+const canRetryLalamoveDispatch = (o) => {
+    if (String(o.order_type || '').trim() !== 'Delivery') return false;
+    const status = String(o.status || '').trim();
+    if (status === 'Completed') return false;
+    // Allow retry after Lalamove terminal failure even if local status was left mid-kitchen
+    if (status === 'Cancelled') {
+        return String(o.delivery_booking_status || '').trim() === 'terminal_failed';
+    }
+    const booking = String(o.delivery_booking_status || '').trim();
+    if (['booking_failed', 'pending', 'terminal_failed'].includes(booking)) return true;
+    // Delivery order never booked (legacy rows)
+    if (!o.external_order_id && booking !== 'booked' && booking !== 'not_required') return true;
+    return false;
+};
+
 const toNonEmptyString = (value) => {
     if (Array.isArray(value)) {
         for (const item of value) {
@@ -854,8 +870,22 @@ const toPositiveInteger = (value) => {
 
 const normalizePaymentMethod = (value) => {
     const normalized = String(value || '').trim().toLowerCase();
-    if (normalized === 'curlec') return PAYMENT_METHOD_CURLEC;
-    return PAYMENT_METHOD_DUITNOW;
+    if (normalized === 'curlec' || normalized === '') return PAYMENT_METHOD_CURLEC;
+    if (normalized === 'duitnow') {
+        // Historical orders may still show DuitNow; new checkouts must use Curlec.
+        return 'DuitNow';
+    }
+    return PAYMENT_METHOD_CURLEC;
+};
+
+const assertCurlecPaymentMethodForNewOrder = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized && normalized !== 'curlec') {
+        const error = new Error('Only Curlec payment is supported');
+        error.status = 400;
+        throw error;
+    }
+    return PAYMENT_METHOD_CURLEC;
 };
 
 const isCurlecConfigured = () => Boolean(CURLEC_KEY_ID && CURLEC_KEY_SECRET);
@@ -1534,9 +1564,61 @@ const issueCurlecRefundForOrder = async ({
             reason: `refund_${refundStatus}`
         });
 
+        let voidSideEffects = null;
+        if (refundStatus !== REFUND_STATUS_FAILED) {
+            try {
+                voidSideEffects = await refundService.applyOrderVoidSideEffects(orderId, {
+                    reason: normalizedReason || 'Refund'
+                });
+                if (voidSideEffects?.clawback?.success && voidSideEffects.clawback.points > 0) {
+                    try {
+                        if (typeof emailService.queuePointsClawbackEmail === 'function') {
+                            emailService.queuePointsClawbackEmail({
+                                userId: voidSideEffects.clawback.userId,
+                                orderId,
+                                points: voidSideEffects.clawback.points,
+                                balance: voidSideEffects.clawback.balance,
+                                debtPoints: voidSideEffects.clawback.debtPoints
+                            });
+                        }
+                    } catch (emailErr) {
+                        console.error('Failed to queue points clawback email:', emailErr);
+                    }
+                }
+                if (voidSideEffects?.voucher?.success && voidSideEffects.voucher.code) {
+                    try {
+                        let voucherUserId =
+                            voidSideEffects.clawback?.userId ||
+                            order?.user_id ||
+                            order?.userId ||
+                            null;
+                        if (!voucherUserId) {
+                            const [urows] = await db.query(
+                                `SELECT user_id FROM orders WHERE id = ? LIMIT 1`,
+                                [orderId]
+                            );
+                            voucherUserId = urows[0]?.user_id || null;
+                        }
+                        if (typeof emailService.queueVoucherRestoredEmail === 'function' && voucherUserId) {
+                            emailService.queueVoucherRestoredEmail({
+                                userId: voucherUserId,
+                                orderId,
+                                code: voidSideEffects.voucher.code
+                            });
+                        }
+                    } catch (emailErr) {
+                        console.error('Failed to queue voucher restored email:', emailErr);
+                    }
+                }
+            } catch (voidError) {
+                console.error(`Refund side-effects failed for order ${orderId}:`, voidError);
+            }
+        }
+
         return {
             success: refundStatus !== REFUND_STATUS_FAILED,
             orderId: String(orderId),
+            voidSideEffects,
             refund: {
                 id: refundId,
                 status: refundStatus,
@@ -2121,8 +2203,14 @@ const mapLalamoveUpdateToOrderStatus = ({ eventType, lalamoveStatus }) => {
     if (normalizedStatus === 'ON_GOING') return 'Rider OTW';
     if (normalizedStatus === 'PICKED_UP') return 'Out For Delivery';
     if (normalizedStatus === 'COMPLETED') return 'Completed';
-    if (['CANCELED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(normalizedStatus)) {
+    // Merchant-initiated cancel (or Lalamove cancel after we cancel)
+    if (['CANCELED', 'CANCELLED'].includes(normalizedStatus)) {
         return 'Cancelled';
+    }
+    // REJECTED / EXPIRED: Lalamove finished matching unsuccessfully.
+    // Do NOT auto-cancel kitchen order — leave status for admin Retry dispatch or Cancel+refund.
+    if (['REJECTED', 'EXPIRED'].includes(normalizedStatus)) {
+        return null;
     }
 
     if (normalizedEventType === 'DRIVER_ASSIGNED') return 'Rider OTW';
@@ -2244,7 +2332,7 @@ const fetchDeliveryOptions = async (executor = db) => {
 const fetchPaymentOptions = async (executor = db) => {
     const [rows] = await executor.query(
         `
-            SELECT duitnow_qr_url, duitnow_enabled, curlec_enabled, service_fee
+            SELECT curlec_enabled, service_fee
             FROM payment_options
             WHERE id = 1
             LIMIT 1
@@ -2259,11 +2347,7 @@ const fetchPaymentOptions = async (executor = db) => {
             : Number(DEFAULT_SERVICE_FEE.toFixed(2));
 
     return {
-        duitnowQrUrl: String(row.duitnow_qr_url || DEFAULT_DUITNOW_QR_URL).trim(),
-        duitnowEnabled:
-            (row.duitnow_enabled !== undefined ? Boolean(row.duitnow_enabled) : true) &&
-            ALLOW_UNVERIFIED_DUITNOW_ORDERS,
-        curlecEnabled: row.curlec_enabled !== undefined ? Boolean(row.curlec_enabled) : false,
+        curlecEnabled: row.curlec_enabled !== undefined ? Boolean(row.curlec_enabled) : true,
         serviceFee,
         curlecConfigured,
         curlecKeyId: curlecConfigured ? CURLEC_KEY_ID : '',
@@ -3236,31 +3320,17 @@ app.get('/api/admin/payment-options', requireAdmin, async (_req, res) => {
 });
 
 app.put('/api/admin/payment-options', requireAdmin, async (req, res) => {
-    const hasDuitnowQrUrl = req.body?.duitnowQrUrl !== undefined;
-    const hasDuitnowEnabled = req.body?.duitnowEnabled !== undefined;
     const hasCurlecEnabled = req.body?.curlecEnabled !== undefined;
     const hasServiceFee = req.body?.serviceFee !== undefined;
 
-    if (!hasDuitnowQrUrl && !hasDuitnowEnabled && !hasCurlecEnabled && !hasServiceFee) {
+    if (!hasCurlecEnabled && !hasServiceFee) {
         return res.status(400).json({
-            error: 'duitnowQrUrl, duitnowEnabled, curlecEnabled, or serviceFee is required'
+            error: 'curlecEnabled or serviceFee is required'
         });
     }
 
-    const duitnowQrUrl = hasDuitnowQrUrl ? String(req.body?.duitnowQrUrl || '').trim() : null;
     const serviceFeeRaw = hasServiceFee ? toNumber(req.body?.serviceFee) : null;
     const normalizedServiceFee = hasServiceFee && serviceFeeRaw !== null ? Number(serviceFeeRaw.toFixed(2)) : null;
-    if (hasDuitnowQrUrl) {
-        if (!duitnowQrUrl) {
-            return res.status(400).json({ error: 'duitnowQrUrl cannot be empty' });
-        }
-        if (duitnowQrUrl.length > 2048) {
-            return res.status(400).json({ error: 'duitnowQrUrl is too long' });
-        }
-    }
-    if (hasDuitnowEnabled && typeof req.body?.duitnowEnabled !== 'boolean') {
-        return res.status(400).json({ error: 'duitnowEnabled must be boolean' });
-    }
     if (hasCurlecEnabled && typeof req.body?.curlecEnabled !== 'boolean') {
         return res.status(400).json({ error: 'curlecEnabled must be boolean' });
     }
@@ -3281,15 +3351,12 @@ app.put('/api/admin/payment-options', requireAdmin, async (req, res) => {
             `
                 UPDATE payment_options
                 SET
-                    duitnow_qr_url = COALESCE(?, duitnow_qr_url),
-                    duitnow_enabled = COALESCE(?, duitnow_enabled),
+                    duitnow_enabled = FALSE,
                     curlec_enabled = COALESCE(?, curlec_enabled),
                     service_fee = COALESCE(?, service_fee)
                 WHERE id = 1
             `,
             [
-                hasDuitnowQrUrl ? duitnowQrUrl : null,
-                hasDuitnowEnabled ? req.body.duitnowEnabled : null,
                 hasCurlecEnabled ? req.body.curlecEnabled : null,
                 hasServiceFee ? normalizedServiceFee : null
             ]
@@ -5246,6 +5313,9 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
                     o.tracking_url,
                     o.driver_id,
                     o.lalamove_status,
+                    o.delivery_booking_status,
+                    o.delivery_booking_error,
+                    o.delivery_booking_attempts,
                     o.payment_method,
                     o.refund_status,
                     o.refund_amount,
@@ -5543,6 +5613,9 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                     o.tracking_url,
                     o.driver_id,
                     o.lalamove_status,
+                    o.delivery_booking_status,
+                    o.delivery_booking_error,
+                    o.delivery_booking_attempts,
                     o.payment_method,
                     o.refund_status,
                     o.refund_amount,
@@ -5665,7 +5738,14 @@ app.get('/api/orders', attachAuthIfPresent, async (req, res) => {
                 trackingUrl: o.tracking_url,
                 driverId: o.driver_id,
                 lalamoveStatus: o.lalamove_status,
-                paymentMethod: o.payment_method || 'DuitNow',
+                deliveryBookingStatus: o.delivery_booking_status || undefined,
+                deliveryBookingError: o.delivery_booking_error || undefined,
+                deliveryBookingAttempts:
+                    o.delivery_booking_attempts !== undefined && o.delivery_booking_attempts !== null
+                        ? Number(o.delivery_booking_attempts)
+                        : undefined,
+                canRetryDispatch: canRetryLalamoveDispatch(o),
+                paymentMethod: o.payment_method || PAYMENT_METHOD_CURLEC,
                 refundStatus: refundStatus || undefined,
                 refundAmount: o.refund_amount !== null ? parseFloat(o.refund_amount) : undefined,
                 refundId: o.refund_id || undefined,
@@ -5744,7 +5824,12 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     } = req.body;
 
     const normalizedOrderType = orderType === 'Pickup' ? 'Pickup' : 'Delivery';
-    const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
+    let normalizedPaymentMethod;
+    try {
+        normalizedPaymentMethod = assertCurlecPaymentMethodForNewOrder(paymentMethod);
+    } catch (methodError) {
+        return res.status(methodError.status || 400).json({ error: methodError.message });
+    }
     const normalizedCurlecCheckoutSessionId = normalizeCurlecCheckoutSessionId(curlecCheckoutSessionId);
     const stopOrderCreateTimer = startOrderCreateTimer({
         paymentMethod: normalizedPaymentMethod,
@@ -5816,43 +5901,37 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     try {
         paymentOptions = await fetchPaymentOptions(db);
 
-        if (normalizedPaymentMethod === PAYMENT_METHOD_DUITNOW && !paymentOptions.duitnowEnabled) {
-            return res.status(403).json({ error: 'DuitNow payment is currently unavailable' });
+        if (!paymentOptions.curlecEnabled) {
+            return res.status(403).json({ error: 'Curlec payment is currently unavailable' });
+        }
+        if (!paymentOptions.curlecConfigured) {
+            return res.status(503).json({ error: 'Curlec payment is not configured on server' });
         }
 
-        if (normalizedPaymentMethod === PAYMENT_METHOD_CURLEC) {
-            if (!paymentOptions.curlecEnabled) {
-                return res.status(403).json({ error: 'Curlec payment is currently unavailable' });
-            }
-            if (!paymentOptions.curlecConfigured) {
-                return res.status(503).json({ error: 'Curlec payment is not configured on server' });
-            }
+        const normalizedCurlecPayment = normalizeCurlecPaymentPayload(curlecPayment);
+        if (normalizedCurlecPayment.error) {
+            return res.status(400).json({ error: normalizedCurlecPayment.error });
+        }
+        curlecPaymentProof = normalizedCurlecPayment.value;
 
-            const normalizedCurlecPayment = normalizeCurlecPaymentPayload(curlecPayment);
-            if (normalizedCurlecPayment.error) {
-                return res.status(400).json({ error: normalizedCurlecPayment.error });
-            }
-            curlecPaymentProof = normalizedCurlecPayment.value;
+        if (!verifyCurlecPaymentSignature(curlecPaymentProof)) {
+            return res.status(400).json({ error: 'Invalid Curlec payment signature' });
+        }
 
-            if (!verifyCurlecPaymentSignature(curlecPaymentProof)) {
-                return res.status(400).json({ error: 'Invalid Curlec payment signature' });
-            }
+        const paymentDetails = await callCurlecApi({
+            endpoint: `/payments/${encodeURIComponent(curlecPaymentProof.paymentId)}`
+        });
+        if (String(paymentDetails.order_id || '') !== curlecPaymentProof.orderId) {
+            return res.status(400).json({ error: 'Curlec payment does not match the checkout order' });
+        }
+        const paymentStatus = String(paymentDetails.status || '').toLowerCase();
+        if (!['captured', 'authorized'].includes(paymentStatus)) {
+            return res.status(400).json({ error: 'Curlec payment is not completed' });
+        }
 
-            const paymentDetails = await callCurlecApi({
-                endpoint: `/payments/${encodeURIComponent(curlecPaymentProof.paymentId)}`
-            });
-            if (String(paymentDetails.order_id || '') !== curlecPaymentProof.orderId) {
-                return res.status(400).json({ error: 'Curlec payment does not match the checkout order' });
-            }
-            const paymentStatus = String(paymentDetails.status || '').toLowerCase();
-            if (!['captured', 'authorized'].includes(paymentStatus)) {
-                return res.status(400).json({ error: 'Curlec payment is not completed' });
-            }
-
-            paymentAmountInMinorUnits = toPositiveInteger(paymentDetails.amount);
-            if (!paymentAmountInMinorUnits) {
-                return res.status(400).json({ error: 'Unable to validate Curlec payment amount' });
-            }
+        paymentAmountInMinorUnits = toPositiveInteger(paymentDetails.amount);
+        if (!paymentAmountInMinorUnits) {
+            return res.status(400).json({ error: 'Unable to validate Curlec payment amount' });
         }
     } catch (paymentError) {
         console.error('Payment validation failed:', paymentError);
@@ -6238,8 +6317,11 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 delivery_contact_phone,
                 short_code,
                 voucher_id,
-                discount_amount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                discount_amount,
+                delivery_booking_status,
+                delivery_booking_attempts,
+                delivery_last_attempt_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 resolvedUserId,
                 initialStatus,
@@ -6268,7 +6350,10 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 persistedDeliveryContactPhone,
                 orderCode,
                 appliedVoucherId,
-                appliedDiscountAmount
+                appliedDiscountAmount,
+                isLalamoveDelivery ? 'pending' : 'not_required',
+                0,
+                null
             ]
         );
         orderId = orderResult.insertId;
@@ -6281,12 +6366,17 @@ app.post('/api/orders', requireAuth, async (req, res) => {
             );
         }
 
-        // 3. Deduct stock
+        // 3. Deduct stock (atomic non-negative guard)
         for (const [menuItemId, requestedQuantity] of requestedQuantityById.entries()) {
-            await connection.query(
-                'UPDATE menu_items SET stock = stock - ? WHERE id = ?',
-                [requestedQuantity, menuItemId]
+            const [stockResult] = await connection.query(
+                'UPDATE menu_items SET stock = stock - ? WHERE id = ? AND stock >= ?',
+                [requestedQuantity, menuItemId, requestedQuantity]
             );
+            if (stockResult?.affectedRows !== 1) {
+                const error = new Error('One or more items ran out of stock while placing your order');
+                error.status = 409;
+                throw error;
+            }
         }
 
         if (deliveryQuoteReservation?.id) {
@@ -6552,7 +6642,11 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                         lalamove_ongoing_at = CASE
                             WHEN ? IS NULL THEN lalamove_ongoing_at
                             ELSE COALESCE(lalamove_ongoing_at, ?)
-                        END
+                        END,
+                        delivery_booking_status = 'booked',
+                        delivery_booking_error = NULL,
+                        delivery_booking_attempts = delivery_booking_attempts + 1,
+                        delivery_last_attempt_at = UTC_TIMESTAMP()
                     WHERE id = ?
                       AND status <> 'Cancelled'
                 `,
@@ -6613,9 +6707,17 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 deliveryBookingStatus = 'booked';
             }
         } catch (dispatchError) {
-            deliveryBookingStatus = 'pending_manual_dispatch';
-            deliveryBookingMessage =
-                dispatchError?.message || 'Delivery has been queued and will be assigned manually.';
+            const errorCode =
+                dispatchError?.payload?.errors?.[0]?.id ||
+                dispatchError?.code ||
+                dispatchError?.status ||
+                'DISPATCH_FAILED';
+            const errorMessage =
+                dispatchError?.message ||
+                dispatchError?.payload?.errors?.[0]?.message ||
+                'Lalamove booking failed';
+            deliveryBookingStatus = 'booking_failed';
+            deliveryBookingMessage = errorMessage;
             console.error(
                 `Lalamove dispatch failed for order ${orderId}:`,
                 JSON.stringify(dispatchError?.payload || dispatchError?.message || dispatchError)
@@ -6624,18 +6726,23 @@ app.post('/api/orders', requireAuth, async (req, res) => {
                 .query(
                     `
                         UPDATE orders
-                        SET lalamove_status = 'BOOKING_FAILED'
+                        SET
+                            lalamove_status = 'BOOKING_FAILED',
+                            delivery_booking_status = 'booking_failed',
+                            delivery_booking_error = ?,
+                            delivery_booking_attempts = delivery_booking_attempts + 1,
+                            delivery_last_attempt_at = UTC_TIMESTAMP()
                         WHERE id = ?
                           AND external_order_id IS NULL
                     `,
-                    [orderId]
+                    [String(`${errorCode}: ${errorMessage}`).slice(0, 500), orderId]
                 )
                 .catch(() => null);
 
             emitOrdersChangedEvent({
                 source: 'order_dispatch',
                 orderId,
-                reason: 'lalamove_booking_failed'
+                reason: 'delivery_booking_failed'
             });
         }
     }
@@ -6879,7 +6986,7 @@ app.get('/api/orders/:id/receipt', requireAuth, async (req, res) => {
             minute: '2-digit',
             hour12: false
         });
-        const paymentMethodLabel = String(order.payment_method || 'DuitNow').trim() || 'DuitNow';
+        const paymentMethodLabel = String(order.payment_method || PAYMENT_METHOD_CURLEC).trim() || PAYMENT_METHOD_CURLEC;
         const receiptNumber = order.short_code || `FD-${String(order.id).padStart(6, '0')}`;
         const logoBuffer = await fetchImageBuffer(DEFAULT_BRAND_LOGO_URL);
 
@@ -7128,9 +7235,22 @@ app.put('/api/orders/:id/status', requireAdmin, async (req, res) => {
         if (normalizedStatus !== previousStatus) {
             if (normalizedStatus === 'Completed') {
                 emailService.queueOrderEventEmail(orderId, 'completed');
-                loyaltyService.awardPointsForOrder(orderId);
-            } else if (normalizedStatus === 'Cancelled' && !shouldAttemptAutoRefund) {
-                emailService.queueOrderEventEmail(orderId, 'cancelled');
+                try {
+                    await loyaltyService.awardPointsForOrder(orderId);
+                } catch (pointsError) {
+                    console.error(`Failed to award points for order ${orderId}:`, pointsError);
+                }
+            } else if (normalizedStatus === 'Cancelled') {
+                try {
+                    await refundService.applyOrderVoidSideEffects(orderId, {
+                        reason: shouldAttemptAutoRefund ? 'Cancel with refund' : 'Order cancelled'
+                    });
+                } catch (voidError) {
+                    console.error(`Failed void side-effects for order ${orderId}:`, voidError);
+                }
+                if (!shouldAttemptAutoRefund) {
+                    emailService.queueOrderEventEmail(orderId, 'cancelled');
+                }
             }
         }
         res.json({
@@ -7259,6 +7379,205 @@ app.post('/api/admin/orders/:id/cancel', requireAdmin, async (req, res) => {
         console.error('Failed to cancel Lalamove order:', error?.payload || error?.message || error);
         return res.status(error.status || 500).json({
             error: error.message || 'Failed to cancel order',
+            details: error.payload || null
+        });
+    }
+});
+
+/**
+ * Admin: retry Lalamove dispatch for booking_failed / terminal_failed orders.
+ * Does not auto-change customer payment. Creates a fresh quotation then createOrder.
+ */
+app.post('/api/admin/orders/:id/retry-dispatch', requireAdmin, async (req, res) => {
+    const orderId = toPositiveInteger(req.params.id);
+    if (!orderId) {
+        return res.status(400).json({ error: 'Invalid order id' });
+    }
+
+    try {
+        const [rows] = await db.query(
+            `
+                SELECT
+                    id, status, order_type, user_id,
+                    delivery_address, delivery_latitude, delivery_longitude,
+                    delivery_note_snapshot, delivery_contact_phone,
+                    recipient_name_snapshot, short_code,
+                    external_order_id, delivery_booking_status,
+                    scheduled_at_utc, delivery_timing
+                FROM orders
+                WHERE id = ?
+                LIMIT 1
+            `,
+            [orderId]
+        );
+        const order = rows[0];
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        if (order.order_type !== 'Delivery') {
+            return res.status(400).json({ error: 'Retry dispatch is only for delivery orders' });
+        }
+        const orderStatus = String(order.status || '');
+        const bookingStatus = String(order.delivery_booking_status || '');
+        if (orderStatus === 'Completed') {
+            return res.status(409).json({ error: 'Cannot retry dispatch for completed orders' });
+        }
+        if (orderStatus === 'Cancelled' && bookingStatus !== 'terminal_failed') {
+            return res.status(409).json({ error: 'Cannot retry dispatch for cancelled orders' });
+        }
+        const allowRebookTerminal =
+            bookingStatus === 'terminal_failed' && Boolean(order.external_order_id);
+        if (order.external_order_id && !allowRebookTerminal) {
+            return res.status(409).json({
+                error: 'Order already has an active Lalamove booking. Cancel it first if you need a new dispatch.',
+                externalOrderId: order.external_order_id
+            });
+        }
+        if (!['booking_failed', 'terminal_failed', 'pending'].includes(bookingStatus) && order.external_order_id) {
+            return res.status(409).json({
+                error: `Retry not allowed for booking status: ${bookingStatus || 'unknown'}`
+            });
+        }
+        if (!['booking_failed', 'terminal_failed', 'pending'].includes(bookingStatus) && !order.external_order_id) {
+            // allow empty/unknown for never-booked delivery orders
+            if (bookingStatus === 'booked' || bookingStatus === 'not_required') {
+                return res.status(409).json({
+                    error: `Retry not allowed for booking status: ${bookingStatus || 'unknown'}`
+                });
+            }
+        }
+        if (
+            order.delivery_latitude === null ||
+            order.delivery_longitude === null ||
+            !String(order.delivery_address || '').trim()
+        ) {
+            return res.status(400).json({ error: 'Order is missing delivery coordinates/address for retry' });
+        }
+
+        const shopStatus = await fetchShopStatus(db);
+        const scheduleAt =
+            order.delivery_timing === 'SCHEDULED' && order.scheduled_at_utc
+                ? new Date(order.scheduled_at_utc)
+                : undefined;
+
+        const quotation = await lalamoveService.createQuotation({
+            dropoffAddress: order.delivery_address,
+            dropoffLat: order.delivery_latitude,
+            dropoffLng: order.delivery_longitude,
+            dropoffNote: order.delivery_note_snapshot || '',
+            scheduleAt,
+            store: {
+                name: shopStatus?.storeName,
+                phone: shopStatus?.storePhone,
+                address: shopStatus?.storeAddress,
+                latitude: shopStatus?.storeLatitude,
+                longitude: shopStatus?.storeLongitude
+            }
+        });
+
+        const stops = quotation?.stops || [];
+        const { senderStopId, recipientStopId } = extractLalamoveStopIds(stops);
+        if (!senderStopId || !recipientStopId || !quotation?.quotationId) {
+            return res.status(502).json({ error: 'Failed to build a valid Lalamove quotation for retry' });
+        }
+
+        const [userRows] = await db.query(`SELECT name FROM users WHERE id = ? LIMIT 1`, [order.user_id]);
+        const userName = String(userRows[0]?.name || order.recipient_name_snapshot || 'Customer');
+
+        const lalamoveOrder = await lalamoveService.createOrder({
+            quotationId: quotation.quotationId,
+            senderStopId,
+            recipientStopId,
+            recipientName: order.recipient_name_snapshot || 'Customer',
+            recipientPhone: order.delivery_contact_phone,
+            recipientRemarks: buildLalamoveRecipientRemark({
+                shortCode: order.short_code,
+                userName,
+                customerRemark: order.delivery_note_snapshot || ''
+            }),
+            store: {
+                name: shopStatus?.storeName,
+                phone: shopStatus?.storePhone,
+                address: shopStatus?.storeAddress,
+                latitude: shopStatus?.storeLatitude,
+                longitude: shopStatus?.storeLongitude
+            },
+            metadata: {
+                source: 'takcakap',
+                localOrderRef: `fd-${orderId}`,
+                retry: '1'
+            }
+        });
+
+        const mappedStatus =
+            mapLalamoveUpdateToOrderStatus({
+                eventType: 'ORDER_CREATED',
+                lalamoveStatus: lalamoveOrder?.status || ''
+            }) || 'Finding Rider';
+
+        await db.query(
+            `
+                UPDATE orders
+                SET
+                    quotation_id = ?,
+                    delivery_provider = 'Lalamove',
+                    external_order_id = ?,
+                    tracking_url = ?,
+                    driver_id = ?,
+                    lalamove_status = ?,
+                    status = ?,
+                    delivery_booking_status = 'booked',
+                    delivery_booking_error = NULL,
+                    delivery_booking_attempts = delivery_booking_attempts + 1,
+                    delivery_last_attempt_at = UTC_TIMESTAMP()
+                WHERE id = ?
+            `,
+            [
+                quotation.quotationId,
+                lalamoveOrder?.orderId || null,
+                lalamoveOrder?.shareLink || null,
+                lalamoveOrder?.driverId || null,
+                String(lalamoveOrder?.status || 'ASSIGNING_DRIVER'),
+                mappedStatus,
+                orderId
+            ]
+        );
+
+        emitOrdersChangedEvent({
+            source: 'admin_retry_dispatch',
+            orderId,
+            reason: 'lalamove_booked'
+        });
+
+        return res.json({
+            success: true,
+            orderId: String(orderId),
+            externalOrderId: lalamoveOrder?.orderId || null,
+            trackingUrl: lalamoveOrder?.shareLink || null,
+            status: mappedStatus,
+            deliveryBookingStatus: 'booked',
+            feeWarning:
+                'A new Lalamove quotation was used. Delivery fee charged to the Lalamove wallet may differ from the original customer quote.'
+        });
+    } catch (error) {
+        console.error('Retry dispatch failed:', error?.payload || error?.message || error);
+        const message = error?.message || 'Failed to retry Lalamove dispatch';
+        await db
+            .query(
+                `
+                    UPDATE orders
+                    SET
+                        delivery_booking_status = 'booking_failed',
+                        delivery_booking_error = ?,
+                        delivery_booking_attempts = delivery_booking_attempts + 1,
+                        delivery_last_attempt_at = UTC_TIMESTAMP()
+                    WHERE id = ?
+                `,
+                [String(message).slice(0, 500), orderId]
+            )
+            .catch(() => null);
+        return res.status(error.status || 500).json({
+            error: message,
             details: error.payload || null
         });
     }
@@ -7679,6 +7998,10 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
             lalamoveStatus: incomingStatus
         });
 
+        const terminalLalamove =
+            ['REJECTED', 'EXPIRED', 'CANCELED', 'CANCELLED'].includes(
+                String(incomingStatus || '').toUpperCase()
+            );
         const [updateResult] = await db.query(
             `UPDATE orders
              SET
@@ -7688,6 +8011,17 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
                lalamove_ongoing_at = CASE
                    WHEN ? = 1 OR UPPER(COALESCE(?, '')) = 'ON_GOING' THEN COALESCE(lalamove_ongoing_at, UTC_TIMESTAMP())
                    ELSE lalamove_ongoing_at
+               END,
+               delivery_booking_status = CASE
+                   WHEN ? = 1 AND UPPER(COALESCE(?, '')) IN ('REJECTED', 'EXPIRED') THEN 'terminal_failed'
+                   WHEN ? = 1 AND UPPER(COALESCE(?, '')) IN ('CANCELED', 'CANCELLED') THEN 'cancelled'
+                   WHEN UPPER(COALESCE(?, '')) IN ('ASSIGNING_DRIVER', 'ON_GOING', 'PICKED_UP', 'COMPLETED') THEN 'booked'
+                   ELSE delivery_booking_status
+               END,
+               delivery_booking_error = CASE
+                   WHEN ? = 1 AND UPPER(COALESCE(?, '')) IN ('REJECTED', 'EXPIRED')
+                       THEN CONCAT('Lalamove terminal status: ', COALESCE(?, 'UNKNOWN'))
+                   ELSE delivery_booking_error
                END
              WHERE external_order_id = ?
                AND delivery_provider = 'Lalamove'`,
@@ -7697,25 +8031,48 @@ app.post('/api/webhooks/lalamove', webhookRateLimiter, async (req, res) => {
                 mappedOrderStatus,
                 shouldStartCancelWindow ? 1 : 0,
                 incomingStatus,
+                terminalLalamove ? 1 : 0,
+                incomingStatus,
+                terminalLalamove ? 1 : 0,
+                incomingStatus,
+                incomingStatus,
+                terminalLalamove ? 1 : 0,
+                incomingStatus,
+                incomingStatus,
                 String(externalOrderId)
             ]
         );
 
-        if (
-            updateResult?.affectedRows > 0 &&
-            existingOrder &&
-            mappedOrderStatus &&
-            mappedOrderStatus !== previousStatus
-        ) {
+        const statusChanged =
+            Boolean(mappedOrderStatus) && mappedOrderStatus !== previousStatus;
+        const terminalBookingEvent = ['REJECTED', 'EXPIRED'].includes(normalizedIncomingStatus);
+        if (updateResult?.affectedRows > 0 && existingOrder && (statusChanged || terminalBookingEvent)) {
             emitOrdersChangedEvent({
                 source: 'lalamove_webhook',
                 orderId: existingOrder.id,
-                reason: 'lalamove_webhook'
+                reason: terminalBookingEvent ? 'delivery_terminal_failed' : 'lalamove_webhook'
             });
             if (mappedOrderStatus === 'Completed') {
                 emailService.queueOrderEventEmail(existingOrder.id, 'completed');
-                loyaltyService.awardPointsForOrder(existingOrder.id);
+                try {
+                    await loyaltyService.awardPointsForOrder(existingOrder.id);
+                } catch (pointsError) {
+                    console.error(
+                        `Failed to award points for order ${existingOrder.id}:`,
+                        pointsError
+                    );
+                }
             } else if (mappedOrderStatus === 'Cancelled') {
+                try {
+                    await refundService.applyOrderVoidSideEffects(existingOrder.id, {
+                        reason: 'Lalamove cancelled'
+                    });
+                } catch (voidError) {
+                    console.error(
+                        `Failed void side-effects for order ${existingOrder.id}:`,
+                        voidError
+                    );
+                }
                 emailService.queueOrderEventEmail(existingOrder.id, 'cancelled');
             }
         }

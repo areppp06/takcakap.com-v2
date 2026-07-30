@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "test": "npm run test:e2e:critical",
+    "test": "npm run test:unit && npm run test:e2e:critical",
+    "test:unit": "node server/test_points_policy.js && node server/test_loyalty_e2e_logic.js",
     "test:e2e:critical": "node server/webhook_sim_runner.js",
+    "test:loyalty": "node server/test_points_policy.js && node server/test_loyalty_e2e_logic.js",
     "db:migrate": "node server/runMigrations.js",
     "start": "npm run start:dev",
     "start:dev": "concurrently -k -n API,WEB,ADMIN -c blue,green,yellow \"npm:backend:start\" \"npm:dev:proxy\" \"npm:dev:admin\"",

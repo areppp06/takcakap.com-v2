@@ -77,12 +77,6 @@ const UserDashboard: React.FC = () => {
                       <h1 className="text-2xl font-bold text-[#0d1c0d] dark:text-white">{activeUser.name}</h1>
                       <p className="text-[#499c49] font-medium">{activeUser.email}</p>
                       <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-3">
-                         {activeUser.isGoldMember && (
-                             <div className="bg-background-light dark:bg-white/5 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border border-[#e7f4e7] dark:border-white/10">
-                                <span className="material-symbols-outlined text-primary text-base">stars</span>
-                                Gold Member
-                             </div>
-                         )}
                          <div className="bg-background-light dark:bg-white/5 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border border-[#e7f4e7] dark:border-white/10">
                             <span className="material-symbols-outlined text-primary text-base">shopping_bag</span>
                             {activeUser.totalOrders || recentOrders.length} Total Orders

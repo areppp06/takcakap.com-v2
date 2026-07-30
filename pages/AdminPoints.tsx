@@ -6,6 +6,7 @@ import AdminMobileNav from '../components/AdminMobileNav';
 import AdminSidebarNav from '../components/AdminSidebarNav';
 import AdminSidebarFooter from '../components/AdminSidebarFooter';
 import { formatCurrency } from '../utils/currency';
+import { api } from '../services/api';
 
 export default function AdminPoints() {
     const [users, setUsers] = useState<any[]>([]);
@@ -53,14 +54,8 @@ export default function AdminPoints() {
 
     const fetchCooldown = async () => {
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/points/settings', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setCooldownHours(data.voucher_cooldown_hours);
-            }
+            const data = await api.getAdminPointsSettings();
+            setCooldownHours(data.voucher_cooldown_hours);
         } catch (err) {
             console.error(err);
         }
@@ -69,11 +64,7 @@ export default function AdminPoints() {
     const fetchTiers = async () => {
         setTiersLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/points/tiers', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) setTiers(await res.json());
+            setTiers(await api.getAdminPointTiers());
         } catch (err) {
             console.error(err);
         } finally {
@@ -84,13 +75,7 @@ export default function AdminPoints() {
     const fetchStats = async () => {
         setStatsLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/points/stats', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                setStats(await res.json());
-            }
+            setStats(await api.getAdminPointsStats());
         } catch (err) {
             console.error(err);
         } finally {
@@ -101,15 +86,9 @@ export default function AdminPoints() {
     const fetchUsers = async (p: number = 1) => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch(`/api/admin/points/users?page=${p}&limit=${PAGE_SIZE}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setUsers(data.users || []);
-                setTotalPages(data.totalPages || 1);
-            }
+            const data = await api.getAdminPointsUsers({ page: p, limit: PAGE_SIZE });
+            setUsers(data.users || []);
+            setTotalPages(data.totalPages || 1);
         } catch (err) {
             console.error(err);
         } finally {
@@ -122,19 +101,12 @@ export default function AdminPoints() {
         if (!selectedUser || !points || points <= 0) return;
         setAdjusting(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/points/adjust', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    userId: selectedUser.id,
-                    points: Number(points),
-                    action,
-                    description
-                })
+            await api.adjustAdminPoints({
+                userId: selectedUser.id,
+                points: Number(points),
+                action,
+                description
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
             alert('Points adjusted successfully');
             setSelectedUser(null);
             setPoints('');
@@ -152,34 +124,24 @@ export default function AdminPoints() {
         e.preventDefault();
         if (!editingTier) return;
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const url = editingTier.id ? `/api/admin/points/tiers/${editingTier.id}` : '/api/admin/points/tiers';
-            const method = editingTier.id ? 'PUT' : 'POST';
-            const res = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(editingTier)
-            });
-            if (res.ok) {
-                setTierModalOpen(false);
-                fetchTiers();
+            if (editingTier.id) {
+                await api.updateAdminPointTier(editingTier.id, editingTier);
             } else {
-                alert('Failed to save tier');
+                await api.createAdminPointTier(editingTier);
             }
+            setTierModalOpen(false);
+            fetchTiers();
         } catch (err) {
             console.error(err);
+            alert('Failed to save tier');
         }
     };
 
     const handleDeleteTier = async (id: string) => {
         if (!confirm('Are you sure you want to delete this tier?')) return;
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch(`/api/admin/points/tiers/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) fetchTiers();
+            await api.deleteAdminPointTier(id);
+            fetchTiers();
         } catch (err) {
             console.error(err);
         }
@@ -189,18 +151,9 @@ export default function AdminPoints() {
         if (confirmText !== 'CONFIRM') return;
         setSavingCooldown(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/points/settings', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ voucher_cooldown_hours: cooldownHours })
-            });
-            if (res.ok) {
-                alert('Cooldown limit updated successfully!');
-                setConfirmText('');
-            } else {
-                alert('Failed to update cooldown limit');
-            }
+            await api.updateAdminPointsSettings({ voucher_cooldown_hours: cooldownHours });
+            alert('Cooldown limit updated successfully!');
+            setConfirmText('');
         } catch (err) {
             console.error(err);
             alert('Failed to update cooldown limit');

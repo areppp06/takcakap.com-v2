@@ -13,7 +13,6 @@ import OrderHistory from './pages/OrderHistory';
 import SavedAddresses from './pages/SavedAddresses';
 import ManageAccount from './pages/ManageAccount';
 import Checkout from './pages/Checkout';
-import ScanPay from './pages/ScanPay';
 import OrderSuccess from './pages/OrderSuccess';
 import OrderFailed from './pages/OrderFailed';
 import Login from './pages/Login';
@@ -143,8 +142,8 @@ const App: React.FC = () => {
               <Route path="/login" element={<AdminLogin />} />
               <Route path="/admin/login" element={<Navigate to="/login" replace />} />
               <Route path="/manage-shop" element={<RequireAdminAuth><SuspensePage><AdminManageShop /></SuspensePage></RequireAdminAuth>} />
-              <Route path="/admin/points" element={<RequireAdminAuth><SuspensePage><AdminPoints /></SuspensePage></RequireAdminAuth>} />
-              <Route path="/admin/vouchers" element={<RequireAdminAuth><SuspensePage><AdminVouchers /></SuspensePage></RequireAdminAuth>} />
+              <Route path="/points" element={<RequireAdminAuth><SuspensePage><AdminPoints /></SuspensePage></RequireAdminAuth>} />
+              <Route path="/vouchers" element={<RequireAdminAuth><SuspensePage><AdminVouchers /></SuspensePage></RequireAdminAuth>} />
               <Route path="/customers" element={<RequireAdminAuth><SuspensePage><AdminCustomers /></SuspensePage></RequireAdminAuth>} />
               <Route path="/orders" element={<RequireAdminAuth><SuspensePage><AdminOrders /></SuspensePage></RequireAdminAuth>} />
               <Route path="/categories" element={<RequireAdminAuth><SuspensePage><AdminCategories /></SuspensePage></RequireAdminAuth>} />
@@ -161,6 +160,8 @@ const App: React.FC = () => {
               <Route path="/admin/menu" element={<Navigate to="/menu" replace />} />
               <Route path="/admin/delivery-options" element={<Navigate to="/delivery-options" replace />} />
               <Route path="/admin/payment-options" element={<Navigate to="/payment-options" replace />} />
+              <Route path="/admin/points" element={<Navigate to="/points" replace />} />
+              <Route path="/admin/vouchers" element={<Navigate to="/vouchers" replace />} />
               
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -202,7 +203,6 @@ const App: React.FC = () => {
                 <Route path="/account" element={<RequireUserAuth><ManageAccount /></RequireUserAuth>} />
                 <Route path="/complete-profile" element={<RequireUserAuth><CompleteProfile /></RequireUserAuth>} />
                 <Route path="/checkout" element={<RequireUserAuth requirePhone><Checkout /></RequireUserAuth>} />
-                <Route path="/scan-pay" element={<RequireUserAuth requirePhone><ScanPay /></RequireUserAuth>} />
                 <Route path="/success" element={<RequireUserAuth><OrderSuccess /></RequireUserAuth>} />
                 <Route path="/failed" element={<OrderFailed />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -6,6 +6,8 @@ import AdminMobileNav from '../components/AdminMobileNav';
 import AdminSidebarNav from '../components/AdminSidebarNav';
 import AdminSidebarFooter from '../components/AdminSidebarFooter';
 import { formatCurrency } from '../utils/currency';
+import { api } from '../services/api';
+import { AUTH_TOKEN_KEY } from '../contexts/AuthContext';
 
 export default function AdminVouchers() {
     const [vouchers, setVouchers] = useState<any[]>([]);
@@ -55,13 +57,7 @@ export default function AdminVouchers() {
     const fetchStats = async () => {
         setStatsLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch('/api/admin/vouchers/stats', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                setStats(await res.json());
-            }
+            setStats(await api.getAdminVoucherStats());
         } catch (err) {
             console.error(err);
         } finally {
@@ -72,15 +68,13 @@ export default function AdminVouchers() {
     const fetchVouchers = async (p: number = 1) => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            const res = await fetch(`/api/admin/vouchers?page=${p}&limit=${PAGE_SIZE}&source=${activeTab}`, {
-                headers: { Authorization: `Bearer ${token}` }
+            const data = await api.getAdminVouchers({
+                page: p,
+                limit: PAGE_SIZE,
+                source: activeTab
             });
-            if (res.ok) {
-                const data = await res.json();
-                setVouchers(data.vouchers || []);
-                setTotalPages(data.totalPages || 1);
-            }
+            setVouchers(data.vouchers || []);
+            setTotalPages(data.totalPages || 1);
         } catch (err) {
             console.error(err);
         } finally {
@@ -91,12 +85,12 @@ export default function AdminVouchers() {
     const handleExportCsv = async () => {
         setIsExporting(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
             const res = await fetch('/api/admin/vouchers/export', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (!res.ok) throw new Error('Failed to export CSV');
-            
+
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -119,7 +113,6 @@ export default function AdminVouchers() {
         e.preventDefault();
         setCreating(true);
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
             const payload = {
                 code,
                 type,
@@ -130,13 +123,7 @@ export default function AdminVouchers() {
                 user_email: userEmail || null,
                 max_uses: userEmail ? 1 : Number(maxUses)
             };
-            const res = await fetch('/api/admin/vouchers', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
+            await api.createAdminVoucher(payload);
             alert('Voucher created');
             setCode('');
             setDiscountValue('');
@@ -159,11 +146,7 @@ export default function AdminVouchers() {
 
     const handleToggle = async (id: number) => {
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            await fetch(`/api/admin/vouchers/${id}/toggle`, {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.toggleAdminVoucher(id);
             fetchVouchers(page);
         } catch (err) {
             console.error(err);
@@ -179,11 +162,7 @@ export default function AdminVouchers() {
     const handleDelete = async () => {
         if (deleteConfirmText !== 'DELETE' || !voucherToDelete) return;
         try {
-            const token = localStorage.getItem('takcakap_auth_token');
-            await fetch(`/api/admin/vouchers/${voucherToDelete.id}/delete`, {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.deleteAdminVoucher(voucherToDelete.id);
             setDeleteModalOpen(false);
             setVoucherToDelete(null);
             fetchVouchers(page);

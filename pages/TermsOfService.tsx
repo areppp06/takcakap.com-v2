@@ -84,6 +84,17 @@ const sections: TermsSection[] = [
     ]
   },
   {
+    title: '8A. Loyalty Points & Vouchers',
+    paragraphs: [
+      'TakCakap may award loyalty points on completed orders. Points are calculated from the food subtotal only (menu items), and do not include delivery fees or service fees.',
+      'If an order is refunded or cancelled after points were earned, we reverse those points. Your points balance may become negative (a points debt).',
+      'Example: if you have a 10-point debt from a previous refund, new points from future completed orders clear that debt first. You will see a clear message such as: “You have a 10-point debt from a previous refund. New points will clear this first.”',
+      'While your balance is below zero, you cannot redeem points for vouchers.',
+      'If a refund applies to an order where you used a voucher, we restore the voucher usage counter so you may use it again if it has not expired. We do not extend voucher expiry dates after a refund.',
+      'Points and vouchers have no cash value, are not transferable, and may be modified or discontinued by us with reasonable notice where practicable.'
+    ]
+  },
+  {
     title: '9. Customer Responsibilities',
     paragraphs: [
       'Customers agree to:'

@@ -386,7 +386,7 @@ const buildEmailContent = ({ eventType, order, eventConfig }) => {
                 <div style="background:#fafafa; border:1px solid #efefef; border-radius:12px; padding:14px;">
                   <p style="margin:0; font-size:13px; color:#4b5563;"><strong>Order ID:</strong> ${escapeHtml(order.orderNumber)}</p>
                   <p style="margin:4px 0 0; font-size:13px; color:#4b5563;"><strong>Date:</strong> ${escapeHtml(order.createdAtLabel || '')}</p>
-                  <p style="margin:4px 0 0; font-size:13px; color:#4b5563;"><strong>Payment:</strong> ${escapeHtml(order.payment_method || 'DuitNow')}</p>
+                  <p style="margin:4px 0 0; font-size:13px; color:#4b5563;"><strong>Payment:</strong> ${escapeHtml(order.payment_method || 'Curlec')}</p>
                   ${deliveryMeta}
                   ${scheduleMeta}
                 </div>
@@ -439,7 +439,7 @@ const buildEmailContent = ({ eventType, order, eventConfig }) => {
         `Status: ${order.status || ''}`,
         `Order Date: ${order.createdAtLabel || ''}`,
         `Order Type: ${order.order_type || ''}`,
-        `Payment: ${order.payment_method || 'DuitNow'}`,
+        `Payment: ${order.payment_method || 'Curlec'}`,
         eventType === 'cancelled_refund'
             ? `Refund Timeline: ${
                   String(order.refund_status || '').trim().toLowerCase() === 'processed'
@@ -793,9 +793,88 @@ const queueVoucherEmail = (userId, voucherCode, discountValue) => {
     });
 };
 
+const sendPointsClawbackEmail = async ({ userId, orderId, points, balance, debtPoints }) => {
+    if (!EMAIL_NOTIFICATIONS_ENABLED || !SMTP_HOST || !SMTP_FROM_EMAIL) return;
+    const [users] = await db.query(`SELECT email, name FROM users WHERE id = ? LIMIT 1`, [userId]);
+    const user = users[0];
+    if (!user?.email) return;
+    const debtNote =
+        Number(debtPoints) > 0
+            ? `You currently have a ${debtPoints}-point debt. New points from future completed orders will clear this first. Redemptions are blocked until your balance is 0 or higher.`
+            : 'Your points balance is non-negative again.';
+    const mailer = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+        tls: {
+            servername: SMTP_TLS_SERVERNAME || undefined,
+            rejectUnauthorized: SMTP_TLS_REJECT_UNAUTHORIZED
+        }
+    });
+    await mailer.sendMail({
+        from: SMTP_FROM_NAME ? `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>` : SMTP_FROM_EMAIL,
+        to: user.email,
+        subject: 'TakCakap points updated after refund',
+        text: [
+            `Hi ${user.name || 'there'},`,
+            ``,
+            `We reversed ${points} loyalty points for order #${orderId} because of a refund.`,
+            `Your current balance is ${balance} points.`,
+            debtNote,
+            ``,
+            `— TakCakap`
+        ].join('\n')
+    });
+};
+
+const queuePointsClawbackEmail = (payload) => {
+    sendPointsClawbackEmail(payload).catch((error) => {
+        console.error('[Email] Failed to send points clawback email:', error?.message || error);
+    });
+};
+
+const sendVoucherRestoredEmail = async ({ userId, orderId, code }) => {
+    if (!EMAIL_NOTIFICATIONS_ENABLED || !SMTP_HOST || !SMTP_FROM_EMAIL || !userId || !code) return;
+    const [users] = await db.query(`SELECT email, name FROM users WHERE id = ? LIMIT 1`, [userId]);
+    const user = users[0];
+    if (!user?.email) return;
+    const mailer = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+        tls: {
+            servername: SMTP_TLS_SERVERNAME || undefined,
+            rejectUnauthorized: SMTP_TLS_REJECT_UNAUTHORIZED
+        }
+    });
+    await mailer.sendMail({
+        from: SMTP_FROM_NAME ? `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>` : SMTP_FROM_EMAIL,
+        to: user.email,
+        subject: 'Your TakCakap voucher was restored',
+        text: [
+            `Hi ${user.name || 'there'},`,
+            ``,
+            `Because order #${orderId} was refunded, voucher code ${code} has been restored to your account (usage counter reduced).`,
+            `If the voucher is still within its expiry date, you can use it on a future order.`,
+            ``,
+            `— TakCakap`
+        ].join('\n')
+    });
+};
+
+const queueVoucherRestoredEmail = (payload) => {
+    sendVoucherRestoredEmail(payload).catch((error) => {
+        console.error('[Email] Failed to send voucher restored email:', error?.message || error);
+    });
+};
+
 module.exports = {
     sendOrderEventEmail,
     queueOrderEventEmail,
     startWorker,
-    queueVoucherEmail
+    queueVoucherEmail,
+    queuePointsClawbackEmail,
+    queueVoucherRestoredEmail
 };

@@ -70,6 +70,7 @@ const AdminOrders: React.FC = () => {
     const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null);
     const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null);
+    const [retryingDispatchOrderId, setRetryingDispatchOrderId] = useState<string | null>(null);
     const [clockNowMs, setClockNowMs] = useState(Date.now());
     const location = useLocation();
     const navigate = useNavigate();
@@ -484,6 +485,53 @@ const AdminOrders: React.FC = () => {
         }
     };
 
+    const retryDispatch = async (order: Order) => {
+        if (!order.canRetryDispatch && order.orderType !== 'Delivery') return;
+        setRetryingDispatchOrderId(order.id);
+        try {
+            const response = await api.retryAdminOrderDispatch(order.id);
+            setNotice({
+                type: 'success',
+                message: response.feeWarning
+                    ? `Dispatch rebooked for #${order.shortCode || order.id}. ${response.feeWarning}`
+                    : `Dispatch rebooked for #${order.shortCode || order.id}.`
+            });
+            await refreshOrders();
+        } catch (error: any) {
+            setNotice({
+                type: 'error',
+                message: error?.message || `Failed to retry dispatch for order #${order.id}`
+            });
+        } finally {
+            setRetryingDispatchOrderId(null);
+        }
+    };
+
+    const getBookingBadge = (order: Order) => {
+        const status = String(order.deliveryBookingStatus || '').trim();
+        if (!status || status === 'not_required' || status === 'booked') return null;
+        const styles: Record<string, string> = {
+            pending: 'bg-amber-50 text-amber-800 border-amber-200',
+            booking_failed: 'bg-red-50 text-red-700 border-red-200',
+            terminal_failed: 'bg-red-50 text-red-800 border-red-300',
+            cancelled: 'bg-slate-100 text-slate-600 border-slate-200'
+        };
+        const labels: Record<string, string> = {
+            pending: 'Booking pending',
+            booking_failed: 'Booking failed',
+            terminal_failed: 'Lalamove ended',
+            cancelled: 'Booking cancelled'
+        };
+        return (
+            <span
+                className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${styles[status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}
+                title={order.deliveryBookingError || undefined}
+            >
+                {labels[status] || status}
+            </span>
+        );
+    };
+
     const renderOrderActions = (order: Order, compact = false) => {
         const isPickupOrder = order.orderType === 'Pickup';
         const isLalamoveOrder = order.orderType === 'Delivery' && order.deliveryProvider === 'Lalamove';
@@ -494,10 +542,39 @@ const AdminOrders: React.FC = () => {
         const cancelRemainingSeconds = getLalamoveCancelRemainingSeconds(order);
         const isCanceling = cancelingOrderId === order.id;
         const isRefunding = refundingOrderId === order.id;
+        const isRetryingDispatch = retryingDispatchOrderId === order.id;
+        const canRetryDispatch =
+            order.orderType === 'Delivery' &&
+            order.status !== 'Completed' &&
+            (order.canRetryDispatch ||
+                ['booking_failed', 'pending', 'terminal_failed'].includes(
+                    String(order.deliveryBookingStatus || '')
+                ) ||
+                (order.status === 'Cancelled' &&
+                    String(order.deliveryBookingStatus || '') === 'terminal_failed'));
         const isTerminalDeliveryStatus = order.status === 'Cancelled' || order.status === 'Completed';
 
         return (
             <div className={`flex items-center gap-2 ${compact ? 'flex-wrap' : 'justify-end'}`}>
+                {getBookingBadge(order)}
+                {canRetryDispatch && (
+                    <button
+                        onClick={() =>
+                            askConfirmation({
+                                title: 'Retry Lalamove dispatch',
+                                message:
+                                    'Create a new Lalamove booking for this order? The wallet fee may differ from the original customer quote.',
+                                confirmLabel: 'Yes, Retry Dispatch',
+                                onConfirm: () => retryDispatch(order)
+                            })
+                        }
+                        disabled={isRetryingDispatch}
+                        className={`bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-md shadow-orange-500/20 ${compactButton}`}
+                    >
+                        <span className="material-symbols-outlined text-sm">restart_alt</span>
+                        {isRetryingDispatch ? 'Retrying...' : 'Retry Dispatch'}
+                    </button>
+                )}
                 {isPickupOrder && order.status === 'Preparing' && (
                     <button
                         onClick={() => {

@@ -7,7 +7,6 @@ export const currentUser: User = {
   phoneNumber: '+60123456789',
   avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBtxsv562ZCwLqSoijE-3Yvn-ojPi7rygQkohxfrIAog1sBocAg5GQ5ict8pjg32rjVixrdP4Kwuse-98ssjepU-rQ5h_ejMzZ7sOPI167Nm1ybVxrvGn3Xn36BL6T7iGt0a8RvAUl5tOVgc4GSUOqGrTnKYeg8uEJ1_9jw0WNpjWCnGB1vVURcPQnPRnKUTJr4xGGXbEhQKVztLR57hh7qq9ME4PAJCZ9qJ9LzMlIzEE1x5zXeBqTmpVZ9pgZHI1yPynH_3rFY13fN',
   role: 'user',
-  isGoldMember: true,
   totalOrders: 24
 };
 

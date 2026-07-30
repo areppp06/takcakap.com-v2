@@ -146,7 +146,7 @@ module.exports = (requireAuth, requireAdmin) => {
         };
 
         const result = await loyaltyService.redeemVoucher(req.user.id, pointsToRedeem, voucherConfig);
-            
+
             try {
                 if (typeof emailService.queueVoucherEmail === 'function') {
                     emailService.queueVoucherEmail(req.user.id, result.code, discountValue);
@@ -157,7 +157,17 @@ module.exports = (requireAuth, requireAdmin) => {
 
             res.json(result);
         } catch (err) {
-            if (err.message.includes('Insufficient points')) {
+            if (err.code === 'POINTS_DEBT') {
+                return res.status(400).json({
+                    error: err.message,
+                    code: 'POINTS_DEBT',
+                    debtPoints: err.debtPoints || 0
+                });
+            }
+            if (err.code === 'REDEEM_COOLDOWN' || /cooldown|every \d+ hours/i.test(String(err.message || ''))) {
+                return res.status(400).json({ error: err.message });
+            }
+            if (String(err.message || '').includes('Insufficient points')) {
                 return res.status(400).json({ error: 'Insufficient points' });
             }
             res.status(500).json({ error: 'Failed to redeem voucher' });

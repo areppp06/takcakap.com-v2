@@ -223,8 +223,8 @@ const OrderHistory: React.FC = () => {
                     const deliveryFee = order.orderType === 'Delivery' ? (order.deliveryFee || 0) : 0;
                     const subtotal = Math.max(order.total - serviceFeeAmount - deliveryFee, 0);
                     const isLalamoveTrackable = order.deliveryProvider === 'Lalamove' && Boolean(order.trackingUrl);
-                    const paymentMethodLabel = order.paymentMethod || 'DuitNow';
-                    const paymentMethodIcon = paymentMethodLabel.toLowerCase() === 'duitnow' ? 'qr_code_2' : 'payments';
+                    const paymentMethodLabel = order.paymentMethod || 'Curlec';
+                    const paymentMethodIcon = 'payments';
                     const scheduledLabel = getScheduledLabel(order);
 
                     return (

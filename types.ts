@@ -67,6 +67,17 @@ export interface Order {
   cancelWindowMode?: 'OPEN_UNTIL_ASSIGNED' | 'LIMITED' | 'CLOSED';
   cancelWindowRemainingSeconds?: number | null;
   cancelWindowEndsAtUtc?: string | null;
+  deliveryBookingStatus?:
+    | 'not_required'
+    | 'pending'
+    | 'booked'
+    | 'booking_failed'
+    | 'terminal_failed'
+    | 'cancelled'
+    | string;
+  deliveryBookingError?: string | null;
+  deliveryBookingAttempts?: number;
+  canRetryDispatch?: boolean;
   refundStatus?: 'pending' | 'processed' | 'failed';
   refundAmount?: number;
   refundId?: string;
@@ -118,7 +129,6 @@ export interface User {
   avatar: string;
   role: 'user' | 'admin';
   isSuspended?: boolean;
-  isGoldMember?: boolean;
   totalOrders?: number;
 }
 
@@ -208,8 +218,6 @@ export interface DeliveryOptions {
 }
 
 export interface PaymentOptions {
-  duitnowQrUrl: string;
-  duitnowEnabled: boolean;
   curlecEnabled: boolean;
   serviceFee: number;
   curlecConfigured: boolean;

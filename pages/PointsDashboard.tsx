@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import UserDashboardLayout from '../components/UserDashboardLayout';
+import { api } from '../services/api';
 
 interface PointsData {
+    debtPoints?: number;
+    debtMessage?: string | null;
     balance: number;
     transactions: any[];
     totalTransactions: number;
@@ -42,29 +45,23 @@ export default function PointsDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [pointsRes, vouchersRes, savingsRes, tiersRes] = await Promise.all([
-                fetch(`/api/user/points?page=1&limit=${HISTORY_PER_PAGE}`, { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/user/vouchers', { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/user/vouchers/savings', { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/user/points/tiers')
+            const [pointsDataRes, vouchersRes, savingsRes, tiersRes] = await Promise.all([
+                api.getUserPoints({ page: 1, limit: HISTORY_PER_PAGE }),
+                api.getUserVouchers(),
+                api.getUserVoucherSavings(),
+                api.getUserPointTiers()
             ]);
-            
-            if (pointsRes.ok) {
-                const data = await pointsRes.json();
-                setPointsData(data);
-                setHistoryPage(1);
-                if (data.cooldownEndsAt) {
-                    setCooldownEndsAt(new Date(data.cooldownEndsAt));
-                } else {
-                    setCooldownEndsAt(null);
-                }
+
+            setPointsData(pointsDataRes);
+            setHistoryPage(1);
+            if (pointsDataRes.cooldownEndsAt) {
+                setCooldownEndsAt(new Date(pointsDataRes.cooldownEndsAt));
+            } else {
+                setCooldownEndsAt(null);
             }
-            if (vouchersRes.ok) setVouchers(await vouchersRes.json());
-            if (savingsRes.ok) {
-                const s = await savingsRes.json();
-                setTotalSaved(s.totalSaved || 0);
-            }
-            if (tiersRes.ok) setTiers(await tiersRes.json());
+            setVouchers(vouchersRes || []);
+            setTotalSaved(savingsRes?.totalSaved || 0);
+            setTiers(tiersRes || []);
         } catch (err) {
             console.error(err);
         } finally {
@@ -77,12 +74,11 @@ export default function PointsDashboard() {
         const nextPage = historyPage + 1;
         setHistoryLoading(true);
         try {
-            const res = await fetch(`/api/user/points?page=${nextPage}&limit=${HISTORY_PER_PAGE}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setPointsData(prev => prev ? { ...prev, transactions: [...prev.transactions, ...data.transactions] } : data);
-                setHistoryPage(nextPage);
-            }
+            const data = await api.getUserPoints({ page: nextPage, limit: HISTORY_PER_PAGE });
+            setPointsData((prev) =>
+                prev ? { ...prev, transactions: [...prev.transactions, ...data.transactions] } : data
+            );
+            setHistoryPage(nextPage);
         } catch (err) {
             console.error(err);
         } finally {
@@ -119,14 +115,7 @@ export default function PointsDashboard() {
         setRedeeming(true);
         setError('');
         try {
-            const res = await fetch('/api/user/points/redeem', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ points: pointsToRedeem })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to redeem');
-            
+            const data = await api.redeemUserPoints(pointsToRedeem);
             setConfirmRedeem(null);
             setSuccessCode(data.code);
             fetchData();
@@ -194,15 +183,35 @@ export default function PointsDashboard() {
             
             {error && <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">{error}</div>}
 
+            {pointsData?.debtPoints && pointsData.debtPoints > 0 && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 mb-6">
+                    <p className="font-bold flex items-center gap-2">
+                        <span className="material-symbols-outlined text-amber-600">warning</span>
+                        Points debt
+                    </p>
+                    <p className="text-sm mt-1">
+                        {pointsData.debtMessage ||
+                            `You have a ${pointsData.debtPoints}-point debt from a previous refund. New points will clear this first.`}
+                    </p>
+                    <p className="text-xs mt-2 opacity-80">Voucher redemptions are blocked until your balance is 0 or higher.</p>
+                </div>
+            )}
+
             <div className="flex flex-col lg:flex-row gap-8">
                 {/* Left Column: Banner, Redeem Cards, Vouchers */}
                 <div className="flex-1">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         {/* Banner */}
                         <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl p-6 text-white shadow-md flex flex-col justify-center">
-                            <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">Total Points</p>
+                            <p className="opacity-90 text-xs font-bold uppercase tracking-wider mb-1">
+                                {balance < 0 ? 'Points Debt' : 'Total Points'}
+                            </p>
                             <div className="text-3xl md:text-4xl font-extrabold">{balance.toLocaleString()} pts</div>
-                            <p className="text-sm font-medium mt-1 opacity-90">≈ RM {(balance / 200).toFixed(2)} (RM1 = 200 pts)</p>
+                            <p className="text-sm font-medium mt-1 opacity-90">
+                                {balance < 0
+                                    ? 'Future earnings clear this debt first'
+                                    : `≈ RM ${(balance / 200).toFixed(2)} (RM1 = 200 pts)`}
+                            </p>
                         </div>
                         {/* Savings Banner */}
                         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-6 text-white shadow-md flex flex-col justify-center">
