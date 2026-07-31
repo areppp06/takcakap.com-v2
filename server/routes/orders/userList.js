@@ -6,7 +6,7 @@
 const db = require('../../db');
 const { USER_ORDERS_DEFAULT_LIMIT, USER_ORDERS_MAX_LIMIT } = require('../../config');
 const { attachAuthIfPresent } = require('../../middleware/auth');
-const { parsePositiveIntWithBounds, toPositiveInteger } = require('../../lib/primitives');
+const { parsePositiveIntWithBounds, toPositiveInteger, toIsoUtcString } = require('../../lib/primitives');
 const {
     formatOrderRowForClient,
     decodeAdminOrdersCursor,
@@ -115,17 +115,17 @@ module.exports = function register(app) {
                 queryLimit ? [...params, queryLimit + 1] : params
             );
 
-            let pageOrders = orders;
-            let nextCursor = null;
-            if (queryLimit && orders.length > queryLimit) {
-                pageOrders = orders.slice(0, queryLimit);
-                const last = pageOrders[pageOrders.length - 1];
-                nextCursor = encodeAdminOrdersCursor({
+            // Match admin list pagination: fetch limit+1, then trim and set hasMore/nextCursor.
+            const hasMore = Boolean(queryLimit && orders.length > queryLimit);
+            const pageOrders = hasMore ? orders.slice(0, queryLimit) : orders;
+            const last = hasMore && pageOrders.length ? pageOrders[pageOrders.length - 1] : null;
+            const nextCursor = last
+                ? encodeAdminOrdersCursor({
                     createdAtSql: last.created_at_cursor,
                     createdAtUtc: last.created_at_utc_iso,
                     id: last.id
-                });
-            }
+                })
+                : null;
 
             const summaryMap = await fetchOrderSummariesByOrderIds(pageOrders.map((o) => o.id));
             const formatted = pageOrders.map((o) =>
@@ -136,10 +136,21 @@ module.exports = function register(app) {
             );
 
             if (shouldPaginateMine) {
+                // Shape must match frontend UserOrdersPageResponse (items/hasMore/pageSize/...).
+                const latestUpdatedAtUtc = formatted.reduce((latest, item) => {
+                    const candidate = toIsoUtcString(item.updatedAtUtc || item.createdAtUtc);
+                    if (!candidate) return latest;
+                    if (!latest) return candidate;
+                    return new Date(candidate).getTime() > new Date(latest).getTime() ? candidate : latest;
+                }, null);
+
                 return res.json({
-                    orders: formatted,
+                    items: formatted,
+                    hasMore,
                     nextCursor,
-                    limit: queryLimit
+                    pageSize: queryLimit,
+                    latestUpdatedAtUtc,
+                    serverTimeUtc: new Date().toISOString()
                 });
             }
             return res.json(formatted);

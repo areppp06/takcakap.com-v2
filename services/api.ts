@@ -369,13 +369,22 @@ export const api = {
             ...params
         }),
     getMyOrders: async (): Promise<Order[]> => {
-        const payload = await request<UserOrdersPageResponse | Order[]>('/orders', undefined, {
+        const payload = await request<UserOrdersPageResponse | Order[] | { orders?: Order[] }>('/orders', undefined, {
             mine: 1
         });
         if (Array.isArray(payload)) {
             return payload;
         }
-        return payload.items || [];
+        // Prefer UserOrdersPageResponse.items; tolerate legacy { orders } shape.
+        if (payload && typeof payload === 'object') {
+            if (Array.isArray((payload as UserOrdersPageResponse).items)) {
+                return (payload as UserOrdersPageResponse).items;
+            }
+            if (Array.isArray((payload as { orders?: Order[] }).orders)) {
+                return (payload as { orders: Order[] }).orders;
+            }
+        }
+        return [];
     },
     createOrder: async (orderData: CreateOrderPayload) =>
         request<{
