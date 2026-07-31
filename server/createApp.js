@@ -43,6 +43,13 @@ function applyTrustProxy(app) {
 }
 
 /**
+ * Absolute path to Vite production build (Docker: /app/dist).
+ */
+function getDistPath() {
+    return path.resolve(__dirname, '..', 'dist');
+}
+
+/**
  * Build Express app with observability → CORS → JSON(rawBody) → urlencoded → alias → static.
  * Does not mount domain routes or SPA fallback.
  */
@@ -53,6 +60,17 @@ function createApp() {
     app.disable('x-powered-by');
     applyTrustProxy(app);
 
+    const distPath = getDistPath();
+    // One-time visibility for blank-page debugging in Portainer logs
+    try {
+        const fs = require('fs');
+        const assetsDir = path.join(distPath, 'assets');
+        const assetCount = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir).length : 0;
+        console.log(`[createApp] static dist=${distPath} exists=${fs.existsSync(distPath)} assets=${assetCount}`);
+    } catch (e) {
+        console.warn('[createApp] dist probe failed:', e?.message || e);
+    }
+
     // Middleware order matters for webhooks HMAC/rawBody and metrics
     app.use(requestContextMiddleware);
     app.use(requestLogAndMetricsMiddleware);
@@ -61,12 +79,21 @@ function createApp() {
     app.use(createJsonBodyParser());
     app.use(createUrlencodedParser());
     app.use(apiAliasMiddleware);
-    app.use(express.static(path.join(__dirname, '../dist')));
+    // index: false — never auto-serve index.html from static (SPA fallback owns that)
+    app.use(
+        express.static(distPath, {
+            index: false,
+            fallthrough: true,
+            maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0
+        })
+    );
 
     return app;
 }
 
+
 module.exports = {
     createApp,
-    applyTrustProxy
+    applyTrustProxy,
+    getDistPath
 };

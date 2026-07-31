@@ -34,12 +34,31 @@ require('./routes/webhooks')(app);
 app.use('/api', require('./loyaltyRoutes')(requireAuth, requireAdmin));
 
 // --- HANDLE CLIENT-SIDE ROUTING ---
-// Return JSON 404 for unknown API paths; keep SPA fallback for frontend routes.
+// Never SPA-fallback asset/extension requests (avoids MIME text/html on .js/.css → blank page).
+const distIndex = path.resolve(__dirname, '../dist/index.html');
 app.get('*', (req, res) => {
-    if (req.path.startsWith('/api') || (shouldAliasToApi(req.path) && !isBrowserDocumentRequest(req))) {
+    const p = req.path || '';
+    if (p.startsWith('/api') || (shouldAliasToApi(p) && !isBrowserDocumentRequest(req))) {
         return res.status(404).json({ error: 'API route not found' });
     }
-    return res.sendFile(path.join(__dirname, '../dist/index.html'));
+    // Missing static files (hashed assets, sw, icons) must 404 — not return index.html
+    if (
+        p.startsWith('/assets/') ||
+        p === '/sw.js' ||
+        p === '/registerSW.js' ||
+        p === '/manifest.webmanifest' ||
+        /\.[a-zA-Z0-9]{1,8}$/.test(p)
+    ) {
+        return res.status(404).type('text').send('Not found');
+    }
+    return res.sendFile(distIndex, (err) => {
+        if (err) {
+            console.error('[spa] sendFile failed:', err.message, 'path=', distIndex);
+            if (!res.headersSent) {
+                res.status(500).type('text').send('Frontend bundle missing (dist/index.html)');
+            }
+        }
+    });
 });
 
 const startServer = async () => {
