@@ -384,7 +384,14 @@ const metricsAuthMiddleware = (req, res, next) => {
     }
     const authHeader = String(req.headers.authorization || '').trim();
     const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1] || '';
-    if (token !== METRICS_AUTH_TOKEN) {
+    // Constant-time compare when lengths match (avoids timing oracle on metrics token).
+    try {
+        const a = Buffer.from(String(token));
+        const b = Buffer.from(String(METRICS_AUTH_TOKEN));
+        if (a.length === 0 || a.length !== b.length || !require('crypto').timingSafeEqual(a, b)) {
+            return res.status(401).json({ error: 'Unauthorized metrics access' });
+        }
+    } catch {
         return res.status(401).json({ error: 'Unauthorized metrics access' });
     }
     return next();

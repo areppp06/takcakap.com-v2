@@ -7,7 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "test": "npm run test:unit && npm run test:e2e:critical",
-    "test:unit": "node server/test_points_policy.js && node server/test_loyalty_e2e_logic.js",
+    "test:unit": "node server/test_points_policy.js && node server/test_loyalty_e2e_logic.js && node server/test_config.js && node server/test_extraction_pure.js && node server/test_no_undef_scan.js && node server/test_app_smoke.js",
     "test:e2e:critical": "node server/webhook_sim_runner.js",
     "test:loyalty": "node server/test_points_policy.js && node server/test_loyalty_e2e_logic.js",
     "db:migrate": "node server/runMigrations.js",

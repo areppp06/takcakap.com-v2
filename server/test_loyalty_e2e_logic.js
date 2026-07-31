@@ -64,16 +64,33 @@ scenario('booking status machine transitions', () => {
 });
 
 scenario('retry dispatch allowed matrix', () => {
-    const canRetry = ({ orderType, status, booking }) => {
-        if (orderType !== 'Delivery') return false;
-        if (status === 'Completed') return false;
-        if (status === 'Cancelled') return booking === 'terminal_failed';
-        return ['booking_failed', 'pending', 'terminal_failed'].includes(booking);
-    };
-    assert.strictEqual(canRetry({ orderType: 'Delivery', status: 'Preparing', booking: 'booking_failed' }), true);
-    assert.strictEqual(canRetry({ orderType: 'Delivery', status: 'Finding Rider', booking: 'terminal_failed' }), true);
-    assert.strictEqual(canRetry({ orderType: 'Delivery', status: 'Completed', booking: 'booked' }), false);
-    assert.strictEqual(canRetry({ orderType: 'Pickup', status: 'Preparing', booking: 'not_required' }), false);
+    // Production function (row-shaped objects)
+    const { canRetryLalamoveDispatch } = require('./services/orders/orderEvents');
+    const row = (orderType, status, booking, externalOrderId) => ({
+        order_type: orderType,
+        status,
+        delivery_booking_status: booking,
+        external_order_id: externalOrderId === undefined
+            ? (booking === 'booked' ? 'L-1' : null)
+            : externalOrderId
+    });
+    assert.strictEqual(canRetryLalamoveDispatch(row('Delivery', 'Preparing', 'booking_failed')), true);
+    assert.strictEqual(canRetryLalamoveDispatch(row('Delivery', 'Finding Rider', 'terminal_failed')), true);
+    assert.strictEqual(canRetryLalamoveDispatch(row('Delivery', 'Completed', 'booked')), false);
+    assert.strictEqual(canRetryLalamoveDispatch(row('Pickup', 'Preparing', 'not_required')), false);
+    // Cancelled only retriable when terminal_failed
+    assert.strictEqual(canRetryLalamoveDispatch(row('Delivery', 'Cancelled', 'terminal_failed')), true);
+    assert.strictEqual(canRetryLalamoveDispatch(row('Delivery', 'Cancelled', 'booked')), false);
+    // Legacy row: never booked, empty/missing booking, no external id → retry allowed
+    assert.strictEqual(
+        canRetryLalamoveDispatch(row('Delivery', 'Preparing', '', null)),
+        true
+    );
+    // Explicit not_required means dispatch not needed → no retry
+    assert.strictEqual(
+        canRetryLalamoveDispatch(row('Delivery', 'Preparing', 'not_required', null)),
+        false
+    );
 });
 
 if (!process.exitCode) {

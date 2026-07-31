@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 
-const projectDir = '/home/amp/.ampdata/instances/Development-env/foodiedash';
+const projectDir = path.join(__dirname, '..');
 require('dotenv').config({ path: path.join(projectDir, '.env') });
 
 const APP_PORT = 3110;

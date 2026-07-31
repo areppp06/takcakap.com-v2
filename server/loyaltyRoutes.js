@@ -1,10 +1,12 @@
 const express = require('express');
-const router = express.Router();
 const db = require('./db');
 const loyaltyService = require('./loyaltyService');
 const emailService = require('./emailService');
 
 module.exports = (requireAuth, requireAdmin) => {
+    // Fresh Router per factory call (avoids double-register if factory invoked twice).
+    const router = express.Router();
+
     // In-memory rate limiter for voucher validation
     const failedVoucherAttempts = new Map();
 
@@ -175,7 +177,7 @@ module.exports = (requireAuth, requireAdmin) => {
     });
 
     router.post('/user/vouchers/validate', requireAuth, async (req, res) => {
-        const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown');
         if (!checkRateLimit(clientIp)) {
             return res.status(429).json({ error: 'Too many invalid attempts. Please try again in 1 hour 30 minutes.' });
         }

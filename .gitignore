@@ -34,3 +34,13 @@ server/firebase-service-account.json
 **/firebase-service-account.json
 *service-account*.json
 *firebase*adminsdk*.json
+
+# Local recovery snapshots (not for runtime or GHCR)
+*.bak
+*.bak.*
+server/**/*.bak
+server/index.js.monolith.bak
+server/index.js.bak.pre_fix1_5
+
+# Runtime logs under server/
+server/logs/

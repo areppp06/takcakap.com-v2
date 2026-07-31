@@ -7,3 +7,9 @@ android
 foodidash-takcakap-android-app-v2
 *.apk
 *.log
+# Local recovery snapshots — keep in workspace/git, exclude from image build context
+**/*.bak
+**/*.bak.*
+server/**/*.bak
+server/index.js.bak.pre_fix1_5
+server/index.js.monolith.bak

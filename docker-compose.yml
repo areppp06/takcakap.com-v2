@@ -1,10 +1,18 @@
 version: '3.8'
 
+# Portainer: prefer pulling GHCR image (image: below).
+# Local rebuild: docker compose build --build-arg VITE_GOOGLE_CLIENT_ID=...
 services:
   app:
+    image: ghcr.io/areppp06/takcakap.com-v2:latest
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_BRAND_LOGO_URL: ${VITE_BRAND_LOGO_URL:-}
+        VITE_ADMIN_ORDER_ALERT_SOUND_URL: ${VITE_ADMIN_ORDER_ALERT_SOUND_URL:-/admin-order-alert.mp3}
     container_name: takcakap-app
     restart: always
     ports:
