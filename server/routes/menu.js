@@ -158,8 +158,10 @@ module.exports = function registerMenuRoutes(app) {
 
             res.json({ success: true, url: fileUrl });
         } catch (err) {
-            console.error('[Upload] Failed to upload file:', err);
-            res.status(500).json({ error: err.message || 'Failed to upload file to Cloudflare R2' });
+            console.error('[Upload] Failed to upload file:', err?.message || err, err?.stack);
+            res.status(500).json({
+                error: err.message || 'Failed to upload file to Cloudflare R2'
+            });
         }
     });
 
