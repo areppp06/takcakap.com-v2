@@ -2,6 +2,11 @@ const express = require('express');
 const db = require('./db');
 const loyaltyService = require('./loyaltyService');
 const emailService = require('./emailService');
+const {
+    formatDebtMessage,
+    formatVoucherFrozenMessage,
+    isVoucherUseBlockedByDebt
+} = require('./domain/pointsPolicy');
 
 module.exports = (requireAuth, requireAdmin) => {
     // Fresh Router per factory call (avoids double-register if factory invoked twice).
@@ -186,6 +191,22 @@ module.exports = (requireAuth, requireAdmin) => {
         const normalizedCode = String(code || '').trim().toUpperCase();
         
         try {
+            // Points debt freezes all voucher use until balance is non-negative.
+            const [balRows] = await db.query(
+                `SELECT points_balance FROM users WHERE id = ? LIMIT 1`,
+                [req.user.id]
+            );
+            const balance = Number(balRows[0]?.points_balance || 0);
+            if (isVoucherUseBlockedByDebt(balance)) {
+                const debtPoints = Math.abs(balance);
+                return res.status(400).json({
+                    error: formatVoucherFrozenMessage(debtPoints),
+                    code: 'POINTS_DEBT',
+                    debtPoints,
+                    debtMessage: formatDebtMessage(debtPoints)
+                });
+            }
+
             const [voucherRows] = await db.query(
                 `SELECT * FROM vouchers WHERE code = ? AND is_archived = FALSE`,
                 [normalizedCode]
@@ -343,11 +364,8 @@ module.exports = (requireAuth, requireAdmin) => {
             
             const [users] = await connection.query(`SELECT points_balance FROM users WHERE id = ? FOR UPDATE`, [userId]);
             if (users.length === 0) throw new Error('User not found');
-            
-            if (action === 'deduct' && users[0].points_balance < pointsAmount) {
-                throw new Error('User balance is lower than deduction amount');
-            }
 
+            // Admin deduct may drive balance negative (points debt). Redeem/vouchers freeze until cleared.
             const dbAction = action === 'add' ? 'admin_add' : 'admin_deduct';
             const pointsMultiplier = action === 'add' ? 1 : -1;
             
@@ -362,11 +380,23 @@ module.exports = (requireAuth, requireAdmin) => {
                 [userId, pointsAmount * pointsMultiplier, dbAction, description || `Admin ${action}ed points`]
             );
 
+            const [afterRows] = await connection.query(
+                `SELECT points_balance FROM users WHERE id = ? LIMIT 1`,
+                [userId]
+            );
+            const balance = Number(afterRows[0]?.points_balance || 0);
+            const debtPoints = balance < 0 ? Math.abs(balance) : 0;
+
             await connection.commit();
-            res.json({ success: true });
+            res.json({
+                success: true,
+                balance,
+                debtPoints,
+                debtMessage: formatDebtMessage(debtPoints)
+            });
         } catch (err) {
             await connection.rollback();
-            if (err.message === 'User not found' || err.message === 'User balance is lower than deduction amount') {
+            if (err.message === 'User not found') {
                 return res.status(400).json({ error: err.message });
             }
             res.status(500).json({ error: 'Failed to adjust points' });

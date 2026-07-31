@@ -781,7 +781,12 @@ export const api = {
         action: 'add' | 'deduct';
         description?: string;
     }) =>
-        request<{ success: boolean }>(adminApiPath('/admin/points/adjust'), {
+        request<{
+            success: boolean;
+            balance?: number;
+            debtPoints?: number;
+            debtMessage?: string | null;
+        }>(adminApiPath('/admin/points/adjust'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

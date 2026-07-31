@@ -7,7 +7,9 @@ const {
     POINTS_PER_RM,
     computePointsFromFoodSubtotal,
     formatDebtMessage,
-    isRedeemBlockedByDebt
+    formatVoucherFrozenMessage,
+    isRedeemBlockedByDebt,
+    isVoucherUseBlockedByDebt
 } = require('./domain/pointsPolicy');
 
 function test(name, fn) {
@@ -43,8 +45,13 @@ test('debt message copy', () => {
     assert.strictEqual(formatDebtMessage(0), null);
     assert.strictEqual(
         formatDebtMessage(10),
-        'You have a 10-point debt from a previous refund. New points will clear this first.'
+        'Points debt: 10. Future purchases restore this balance first. Redemptions and vouchers are frozen until cleared.'
     );
+});
+
+test('voucher frozen message', () => {
+    assert.ok(String(formatVoucherFrozenMessage(10)).includes('10'));
+    assert.ok(String(formatVoucherFrozenMessage(0)).toLowerCase().includes('frozen'));
 });
 
 test('redeem blocked only when balance negative', () => {
@@ -52,6 +59,8 @@ test('redeem blocked only when balance negative', () => {
     assert.strictEqual(isRedeemBlockedByDebt(5), false);
     assert.strictEqual(isRedeemBlockedByDebt(-1), true);
     assert.strictEqual(isRedeemBlockedByDebt(-10), true);
+    assert.strictEqual(isVoucherUseBlockedByDebt(-1), true);
+    assert.strictEqual(isVoucherUseBlockedByDebt(0), false);
 });
 
 if (!process.exitCode) {

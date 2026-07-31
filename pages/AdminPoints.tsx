@@ -101,13 +101,21 @@ export default function AdminPoints() {
         if (!selectedUser || !points || points <= 0) return;
         setAdjusting(true);
         try {
-            await api.adjustAdminPoints({
+            const result = await api.adjustAdminPoints({
                 userId: selectedUser.id,
                 points: Number(points),
                 action,
                 description
             });
-            alert('Points adjusted successfully');
+            const nextBalance = result?.balance;
+            const debt = result?.debtPoints || 0;
+            if (typeof nextBalance === 'number' && debt > 0) {
+                alert(`Points adjusted. New balance: ${nextBalance} pts (debt: ${debt}). Redemptions and vouchers are frozen until cleared.`);
+            } else if (typeof nextBalance === 'number') {
+                alert(`Points adjusted successfully. New balance: ${nextBalance} pts.`);
+            } else {
+                alert('Points adjusted successfully');
+            }
             setSelectedUser(null);
             setPoints('');
             setDescription('');
@@ -364,6 +372,11 @@ export default function AdminPoints() {
                                         <button type="button" onClick={() => setAction('add')} className={`py-2 rounded-lg font-bold border ${action === 'add' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-white text-gray-700'}`}>Add</button>
                                         <button type="button" onClick={() => setAction('deduct')} className={`py-2 rounded-lg font-bold border ${action === 'deduct' ? 'bg-red-100 border-red-500 text-red-700' : 'bg-white text-gray-700'}`}>Deduct</button>
                                     </div>
+                                    {action === 'deduct' && (
+                                        <p className="text-xs text-amber-700">
+                                            Deduction may create a points debt. Redemptions and vouchers freeze until cleared.
+                                        </p>
+                                    )}
                                     <div>
                                         <label className="block text-sm font-bold mb-1">Amount</label>
                                         <input required type="number" min="1" value={points} onChange={e => setPoints(Number(e.target.value))} className="w-full bg-white dark:bg-white/5 border border-[#e7f4e7] dark:border-white/10 rounded-lg px-4 py-2" placeholder="e.g. 500" />
@@ -412,6 +425,11 @@ export default function AdminPoints() {
                                         <span>Deduct Points</span>
                                     </label>
                                 </div>
+                                {action === 'deduct' && (
+                                    <p className="text-xs text-amber-700 mt-2">
+                                        Deduction may create a points debt. Redemptions and vouchers freeze until cleared by future purchases.
+                                    </p>
+                                )}
                             </div>
                             
                             <div>

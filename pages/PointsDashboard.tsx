@@ -183,17 +183,16 @@ export default function PointsDashboard() {
             
             {error && <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">{error}</div>}
 
-            {pointsData?.debtPoints && pointsData.debtPoints > 0 && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 mb-6">
+            {(pointsData?.debtPoints > 0 || balance < 0) && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 mb-6" role="alert">
                     <p className="font-bold flex items-center gap-2">
                         <span className="material-symbols-outlined text-amber-600">warning</span>
                         Points debt
                     </p>
                     <p className="text-sm mt-1">
                         {pointsData.debtMessage ||
-                            `You have a ${pointsData.debtPoints}-point debt from a previous refund. New points will clear this first.`}
+                            `Points debt: ${Math.abs(pointsData?.debtPoints || balance)}. Future purchases restore this balance first. Redemptions and vouchers are frozen until cleared.`}
                     </p>
-                    <p className="text-xs mt-2 opacity-80">Voucher redemptions are blocked until your balance is 0 or higher.</p>
                 </div>
             )}
 
@@ -209,7 +208,7 @@ export default function PointsDashboard() {
                             <div className="text-3xl md:text-4xl font-extrabold">{balance.toLocaleString()} pts</div>
                             <p className="text-sm font-medium mt-1 opacity-90">
                                 {balance < 0
-                                    ? 'Future earnings clear this debt first'
+                                    ? 'Restored by points from future purchases'
                                     : `≈ RM ${(balance / 200).toFixed(2)} (RM1 = 200 pts)`}
                             </p>
                         </div>
@@ -240,17 +239,17 @@ export default function PointsDashboard() {
                     {/* Redeem Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                         {tiers.map(tier => (
-                            <div key={tier.id} className={`bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm ${cooldownEndsAt ? 'opacity-60' : ''}`}>
+                            <div key={tier.id} className={`bg-white border border-gray-200 rounded-xl p-5 text-center flex flex-col justify-between shadow-sm ${(cooldownEndsAt || balance < 0) ? 'opacity-60' : ''}`}>
                                 <div>
                                     <div className="font-extrabold text-lg mb-1 text-gray-900">RM{Number(tier.discount_amount).toFixed(0)} Off</div>
                                     <div className="text-sm text-gray-600 mb-4">(Redeem {tier.points_required} pts)</div>
                                 </div>
                                 <button 
                                     onClick={() => handleRedeemClick(tier.points_required, tier.discount_amount)}
-                                    disabled={balance < tier.points_required || redeeming || !!cooldownEndsAt}
+                                    disabled={balance < 0 || balance < tier.points_required || redeeming || !!cooldownEndsAt}
                                     className="w-full bg-[#6a35d8] hover:bg-[#5b2ab9] text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
                                 >
-                                    {cooldownEndsAt ? 'On Cooldown' : 'Redeem'}
+                                    {balance < 0 ? 'Frozen' : cooldownEndsAt ? 'On Cooldown' : 'Redeem'}
                                 </button>
                             </div>
                         ))}
@@ -258,16 +257,23 @@ export default function PointsDashboard() {
 
                     {/* My Vouchers */}
                     <h2 className="text-xl font-bold mb-4 text-gray-900">My Vouchers</h2>
+                    {balance < 0 && displayVouchers.length > 0 && (
+                        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                            Active vouchers are frozen until points debt is cleared.
+                        </p>
+                    )}
                     {displayVouchers.length === 0 ? (
                         <p className="text-gray-500 mb-8">No vouchers available.</p>
                     ) : (
                         <div className="mb-8">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 {currentVouchers.map(v => (
-                                    <div key={v.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
+                                    <div key={v.id} className={`bg-white border rounded-xl p-5 shadow-sm relative flex flex-col justify-between ${balance < 0 ? 'border-amber-200 opacity-75' : 'border-gray-200'}`}>
                                         <div className="flex justify-between items-start mb-1">
                                             <div className="font-bold text-sm text-gray-800">VOUCHER - {v.code}</div>
-                                            <span className="bg-[#e4f7eb] text-[#2d9154] text-xs font-bold px-2 py-0.5 rounded-full">(Active)</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${balance < 0 ? 'bg-amber-100 text-amber-800' : 'bg-[#e4f7eb] text-[#2d9154]'}`}>
+                                                {balance < 0 ? '(Frozen)' : '(Active)'}
+                                            </span>
                                         </div>
                                         <div className="font-extrabold text-xl mb-1 text-gray-900">RM {Number(v.discount_value).toFixed(0)}</div>
                                         {v.expires_at && (
@@ -276,8 +282,9 @@ export default function PointsDashboard() {
                                         
                                         <button 
                                             onClick={() => handleCopy(v.code)}
-                                            className="absolute bottom-4 right-4 bg-gray-100 hover:bg-gray-200 p-2 rounded-lg text-gray-600 transition"
-                                            title="Copy Code"
+                                            disabled={balance < 0}
+                                            className="absolute bottom-4 right-4 bg-gray-100 hover:bg-gray-200 p-2 rounded-lg text-gray-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                            title={balance < 0 ? 'Frozen until debt is cleared' : 'Copy Code'}
                                         >
                                             <span className="material-symbols-outlined text-[18px] leading-none">content_copy</span>
                                         </button>

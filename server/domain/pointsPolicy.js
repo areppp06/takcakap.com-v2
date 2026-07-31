@@ -8,17 +8,34 @@ const computePointsFromFoodSubtotal = (foodSubtotal) => {
     return Math.floor(subtotal) * POINTS_PER_RM;
 };
 
+/**
+ * Short formal user-facing copy when balance is negative.
+ * Debt is cleared by points earned on future completed purchases (food subtotal).
+ */
 const formatDebtMessage = (debtPoints) => {
     const amount = Math.max(0, Math.floor(Number(debtPoints) || 0));
     if (amount <= 0) return null;
-    return `You have a ${amount}-point debt from a previous refund. New points will clear this first.`;
+    return `Points debt: ${amount}. Future purchases restore this balance first. Redemptions and vouchers are frozen until cleared.`;
+};
+
+const formatVoucherFrozenMessage = (debtPoints) => {
+    const amount = Math.max(0, Math.floor(Number(debtPoints) || 0));
+    if (amount <= 0) {
+        return 'Vouchers are frozen until your points balance is non-negative.';
+    }
+    return `Vouchers are frozen. Clear ${amount} points debt via purchases first.`;
 };
 
 const isRedeemBlockedByDebt = (balance) => Number(balance) < 0;
+
+/** Same rule: any points debt freezes voucher use and redemption. */
+const isVoucherUseBlockedByDebt = (balance) => Number(balance) < 0;
 
 module.exports = {
     POINTS_PER_RM,
     computePointsFromFoodSubtotal,
     formatDebtMessage,
-    isRedeemBlockedByDebt
+    formatVoucherFrozenMessage,
+    isRedeemBlockedByDebt,
+    isVoucherUseBlockedByDebt
 };

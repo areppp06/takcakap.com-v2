@@ -46,6 +46,11 @@ const {
     validateCurlecPaymentForCreate,
     assertDeliveryQuoteMatchesOrder
 } = require('../../services/orders/createOrder');
+const {
+    formatDebtMessage,
+    formatVoucherFrozenMessage,
+    isVoucherUseBlockedByDebt
+} = require('../../domain/pointsPolicy');
 
 module.exports = function register(app) {
 
@@ -311,6 +316,21 @@ module.exports = function register(app) {
             let appliedDiscountAmount = 0;
 
             if (voucherCode) {
+                const [balRows] = await connection.query(
+                    `SELECT points_balance FROM users WHERE id = ? FOR UPDATE`,
+                    [resolvedUserId]
+                );
+                const pointsBalance = Number(balRows[0]?.points_balance || 0);
+                if (isVoucherUseBlockedByDebt(pointsBalance)) {
+                    const debtPoints = Math.abs(pointsBalance);
+                    const err = new Error(
+                        formatVoucherFrozenMessage(debtPoints) || formatDebtMessage(debtPoints)
+                    );
+                    err.status = 400;
+                    err.code = 'POINTS_DEBT';
+                    throw err;
+                }
+
                 const normalizedCode = String(voucherCode).trim().toUpperCase();
                 const [voucherRows] = await connection.query(
                     `SELECT id, type, discount_value, min_spend, max_discount, expires_at, is_active, is_redeemed, max_uses, times_used, user_id

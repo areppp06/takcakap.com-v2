@@ -208,6 +208,8 @@ const Checkout: React.FC = () => {
 
   // Points State
   const [userPoints, setUserPoints] = useState(0);
+  const [pointsDebt, setPointsDebt] = useState(0);
+  const [pointsDebtMessage, setPointsDebtMessage] = useState<string | null>(null);
 
   // Cart Validation State
   const [menuMap, setMenuMap] = useState<Record<string, MenuItem>>({});
@@ -238,7 +240,15 @@ const Checkout: React.FC = () => {
           api.getUserPoints({ page: 1, limit: 1 }),
           api.getUserVouchers({ activeOnly: true })
         ]);
-        setUserPoints(pointsData.balance || 0);
+        const balance = Number(pointsData.balance || 0);
+        const debt = Number(pointsData.debtPoints || (balance < 0 ? Math.abs(balance) : 0));
+        setUserPoints(balance);
+        setPointsDebt(debt);
+        setPointsDebtMessage(pointsData.debtMessage || null);
+        if (debt > 0 || balance < 0) {
+          setAppliedVoucher(null);
+          setVoucherError('');
+        }
         const validVouchers = (vData || []).filter(
           (v: any) =>
             v.is_active &&
@@ -493,6 +503,14 @@ const Checkout: React.FC = () => {
   const handleApplyVoucher = async (codeToApply?: string | React.MouseEvent) => {
     const code = typeof codeToApply === 'string' ? codeToApply : voucherCodeInput;
     if (!code.trim()) return;
+    if (pointsDebt > 0 || userPoints < 0) {
+      setVoucherError(
+        pointsDebtMessage ||
+          `Vouchers are frozen. Clear ${pointsDebt || Math.abs(userPoints)} points debt via purchases first.`
+      );
+      setAppliedVoucher(null);
+      return;
+    }
     setIsApplyingVoucher(true);
     setVoucherError('');
     try {
@@ -1263,6 +1281,12 @@ const Checkout: React.FC = () => {
                    
                       {/* Voucher Section */}
                       <div className="py-2 border-b border-gray-200 dark:border-gray-600 mb-2">
+                        {(pointsDebt > 0 || userPoints < 0) && (
+                          <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+                            {pointsDebtMessage ||
+                              `Points debt: ${pointsDebt || Math.abs(userPoints)}. Future purchases restore this balance first. Redemptions and vouchers are frozen until cleared.`}
+                          </div>
+                        )}
                         {appliedVoucher ? (
                             <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
                                 <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
@@ -1274,13 +1298,14 @@ const Checkout: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex flex-col gap-2.5 w-full">
+                            <div className={`flex flex-col gap-2.5 w-full ${(pointsDebt > 0 || userPoints < 0) ? 'opacity-60' : ''}`}>
                                 <button 
                                     onClick={() => setShowVoucherModal(true)}
-                                    className="w-full h-11 bg-primary/10 text-primary border border-primary/20 px-4 rounded-lg text-sm font-bold hover:bg-primary/20 flex items-center justify-center gap-2 whitespace-nowrap transition-colors"
+                                    disabled={pointsDebt > 0 || userPoints < 0}
+                                    className="w-full h-11 bg-primary/10 text-primary border border-primary/20 px-4 rounded-lg text-sm font-bold hover:bg-primary/20 flex items-center justify-center gap-2 whitespace-nowrap transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <span className="material-symbols-outlined text-lg">local_activity</span>
-                                    Select Voucher
+                                    {(pointsDebt > 0 || userPoints < 0) ? 'Vouchers Frozen' : 'Select Voucher'}
                                 </button>
                                 <div className="flex gap-2 w-full items-center">
                                     <input
@@ -1288,11 +1313,12 @@ const Checkout: React.FC = () => {
                                         placeholder="Or enter code manually"
                                         value={voucherCodeInput}
                                         onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
-                                        className="h-11 flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none min-w-0"
+                                        disabled={pointsDebt > 0 || userPoints < 0}
+                                        className="h-11 flex-1 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none min-w-0 disabled:opacity-50"
                                     />
                                     <button 
                                         onClick={handleApplyVoucher}
-                                        disabled={!voucherCodeInput.trim() || isApplyingVoucher}
+                                        disabled={!voucherCodeInput.trim() || isApplyingVoucher || pointsDebt > 0 || userPoints < 0}
                                         className="h-11 bg-gray-800 dark:bg-gray-200 text-white dark:text-black px-4 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center transition-colors shrink-0"
                                     >
                                         {isApplyingVoucher ? '...' : 'Apply'}
