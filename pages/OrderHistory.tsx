@@ -27,6 +27,7 @@ const OrderHistory: React.FC = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isDownloadingReceiptId, setIsDownloadingReceiptId] = useState<string | null>(null);
   const [isFetchingReorderId, setIsFetchingReorderId] = useState<string | null>(null);
   const [isApplyingReorder, setIsApplyingReorder] = useState(false);
@@ -81,8 +82,13 @@ const OrderHistory: React.FC = () => {
       setOrders((prev) => (append ? mergeOrdersUnique(prev, data.items || []) : data.items || []));
       setHasMore(Boolean(data.hasMore));
       setNextCursor(data.nextCursor || null);
+      setLoadError(null);
     } catch (e) {
       console.error("Failed to load orders", e);
+      if (!append) {
+        setOrders([]);
+        setLoadError(e instanceof Error ? e.message : 'Failed to load orders');
+      }
     } finally {
       if (append) {
         setIsLoadingMore(false);
@@ -214,6 +220,18 @@ const OrderHistory: React.FC = () => {
             <div className="space-y-6">
                 {isLoading ? (
                     <div className="text-center py-12 text-gray-500">Loading your order history...</div>
+                ) : loadError ? (
+                    <div className="bg-white dark:bg-white/5 rounded-xl border border-rose-200 dark:border-rose-900/40 p-8 text-center space-y-3">
+                      <p className="text-rose-700 dark:text-rose-300 font-semibold">Could not load orders</p>
+                      <p className="text-sm text-gray-500">{loadError}</p>
+                      <button
+                        type="button"
+                        onClick={() => loadOrders({ showLoading: true })}
+                        className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold"
+                      >
+                        Retry
+                      </button>
+                    </div>
                 ) : orders.length === 0 ? (
                     <div className="bg-white dark:bg-white/5 rounded-xl border border-[#e7f4e7] dark:border-white/10 p-8 text-center text-gray-500">
                       No order history yet.

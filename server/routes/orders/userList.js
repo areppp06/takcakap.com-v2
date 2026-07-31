@@ -128,15 +128,23 @@ module.exports = function register(app) {
                 : null;
 
             const summaryMap = await fetchOrderSummariesByOrderIds(pageOrders.map((o) => o.id));
-            const formatted = pageOrders.map((o) =>
-                formatOrderRowForClient({
-                    ...o,
-                    items_summary: summaryMap.get(toPositiveInteger(o.id)) || ''
-                })
-            );
+            const formatted = [];
+            for (const o of pageOrders) {
+                try {
+                    formatted.push(
+                        formatOrderRowForClient({
+                            ...o,
+                            items_summary: summaryMap.get(toPositiveInteger(o.id)) || ''
+                        })
+                    );
+                } catch (rowError) {
+                    console.error('Failed to format order row for client:', o?.id, rowError?.message || rowError);
+                }
+            }
 
             if (shouldPaginateMine) {
                 // Shape must match frontend UserOrdersPageResponse (items/hasMore/pageSize/...).
+                // Also include legacy `orders` + `limit` so older SPAs still render.
                 const latestUpdatedAtUtc = formatted.reduce((latest, item) => {
                     const candidate = toIsoUtcString(item.updatedAtUtc || item.createdAtUtc);
                     if (!candidate) return latest;
@@ -146,16 +154,18 @@ module.exports = function register(app) {
 
                 return res.json({
                     items: formatted,
+                    orders: formatted,
                     hasMore,
                     nextCursor,
                     pageSize: queryLimit,
+                    limit: queryLimit,
                     latestUpdatedAtUtc,
                     serverTimeUtc: new Date().toISOString()
                 });
             }
             return res.json(formatted);
         } catch (error) {
-            console.error(error);
+            console.error('Failed to fetch user orders:', error?.message || error);
             return res.status(500).json({ error: 'Failed to fetch orders' });
         }
     });

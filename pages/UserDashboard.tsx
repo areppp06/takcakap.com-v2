@@ -10,6 +10,7 @@ import UserDashboardLayout from '../components/UserDashboardLayout';
 const UserDashboard: React.FC = () => {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { user } = useAuth();
   const activeUser = user || currentUser;
 
@@ -46,8 +47,11 @@ const UserDashboard: React.FC = () => {
       try {
         const data = await api.getMyOrdersPage({ limit: 5 });
         setRecentOrders(data.items || []);
+        setLoadError(null);
       } catch (e) {
       console.error("Failed to load orders", e);
+      setRecentOrders([]);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load orders');
     } finally {
       if (showLoading) setIsLoading(false);
     }
@@ -95,6 +99,11 @@ const UserDashboard: React.FC = () => {
                <div className="md:hidden p-4 space-y-3">
                   {isLoading ? (
                     <div className="text-center text-sm text-gray-500 py-4">Loading orders...</div>
+                  ) : loadError ? (
+                    <div className="text-center text-sm text-rose-600 py-4 space-y-2">
+                      <p>Could not load orders: {loadError}</p>
+                      <button type="button" onClick={() => loadOrders(true)} className="text-primary font-bold">Retry</button>
+                    </div>
                   ) : recentOrders.length === 0 ? (
                     <div className="text-center text-sm text-gray-500 py-4">No orders yet.</div>
                   ) : (
@@ -154,6 +163,8 @@ const UserDashboard: React.FC = () => {
                      <tbody className="divide-y divide-[#e7f4e7] dark:divide-white/10">
                         {isLoading ? (
                             <tr><td colSpan={5} className="p-6 text-center text-gray-500">Loading orders...</td></tr>
+                        ) : loadError ? (
+                            <tr><td colSpan={5} className="p-6 text-center text-rose-600 text-sm">Could not load orders: {loadError}</td></tr>
                         ) : recentOrders.length === 0 ? (
                             <tr><td colSpan={5} className="p-6 text-center text-gray-500">No orders yet.</td></tr>
                         ) : (

@@ -53,3 +53,5 @@ jobs:
             VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || '/api' }}
             VITE_BRAND_LOGO_URL=${{ vars.VITE_BRAND_LOGO_URL }}
             VITE_ADMIN_ORDER_ALERT_SOUND_URL=${{ vars.VITE_ADMIN_ORDER_ALERT_SOUND_URL || '/admin-order-alert.mp3' }}
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp || github.run_started_at }}

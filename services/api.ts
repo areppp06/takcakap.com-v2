@@ -80,6 +80,58 @@ const request = async <T>(path: string, options?: RequestInit, query?: Record<st
     return response.json() as Promise<T>;
 };
 
+/**
+ * Normalize GET /orders?mine=1 payloads.
+ * Current API: { items, hasMore, nextCursor, pageSize, ... }
+ * Legacy modular stub: { orders, nextCursor, limit }
+ * Very old: bare Order[]
+ */
+const normalizeUserOrdersPage = (
+    payload: UserOrdersPageResponse | Order[] | { orders?: Order[]; items?: Order[]; nextCursor?: string | null; hasMore?: boolean; pageSize?: number; limit?: number; latestUpdatedAtUtc?: string | null; serverTimeUtc?: string } | null | undefined
+): UserOrdersPageResponse => {
+    if (Array.isArray(payload)) {
+        return {
+            items: payload,
+            hasMore: false,
+            nextCursor: null,
+            pageSize: payload.length,
+            latestUpdatedAtUtc: null,
+            serverTimeUtc: new Date().toISOString()
+        };
+    }
+
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    const items = Array.isArray((raw as UserOrdersPageResponse).items)
+        ? (raw as UserOrdersPageResponse).items
+        : Array.isArray((raw as { orders?: Order[] }).orders)
+            ? ((raw as { orders: Order[] }).orders)
+            : [];
+
+    const nextCursor =
+        (raw as UserOrdersPageResponse).nextCursor === undefined
+            ? null
+            : ((raw as UserOrdersPageResponse).nextCursor ?? null);
+    const hasMore =
+        typeof (raw as UserOrdersPageResponse).hasMore === 'boolean'
+            ? Boolean((raw as UserOrdersPageResponse).hasMore)
+            : Boolean(nextCursor);
+    const pageSize =
+        typeof (raw as UserOrdersPageResponse).pageSize === 'number'
+            ? Number((raw as UserOrdersPageResponse).pageSize)
+            : typeof (raw as { limit?: number }).limit === 'number'
+                ? Number((raw as { limit: number }).limit)
+                : items.length;
+
+    return {
+        items,
+        hasMore,
+        nextCursor,
+        pageSize,
+        latestUpdatedAtUtc: (raw as UserOrdersPageResponse).latestUpdatedAtUtc ?? null,
+        serverTimeUtc: (raw as UserOrdersPageResponse).serverTimeUtc || new Date().toISOString()
+    };
+};
+
 type AdminOrdersStreamListener = (eventName: string, rawData: string) => void;
 
 const parseSseEventBlock = (rawBlock: string): { eventName: string; data: string } | null => {
@@ -363,28 +415,18 @@ export const api = {
     getMyOrdersPage: async (params?: {
         limit?: number;
         cursor?: string;
-    }): Promise<UserOrdersPageResponse> =>
-        request<UserOrdersPageResponse>('/orders', undefined, {
+    }): Promise<UserOrdersPageResponse> => {
+        const payload = await request<UserOrdersPageResponse | Order[] | { orders?: Order[] }>('/orders', undefined, {
             mine: 1,
             ...params
-        }),
+        });
+        return normalizeUserOrdersPage(payload);
+    },
     getMyOrders: async (): Promise<Order[]> => {
         const payload = await request<UserOrdersPageResponse | Order[] | { orders?: Order[] }>('/orders', undefined, {
             mine: 1
         });
-        if (Array.isArray(payload)) {
-            return payload;
-        }
-        // Prefer UserOrdersPageResponse.items; tolerate legacy { orders } shape.
-        if (payload && typeof payload === 'object') {
-            if (Array.isArray((payload as UserOrdersPageResponse).items)) {
-                return (payload as UserOrdersPageResponse).items;
-            }
-            if (Array.isArray((payload as { orders?: Order[] }).orders)) {
-                return (payload as { orders: Order[] }).orders;
-            }
-        }
-        return [];
+        return normalizeUserOrdersPage(payload).items || [];
     },
     createOrder: async (orderData: CreateOrderPayload) =>
         request<{
