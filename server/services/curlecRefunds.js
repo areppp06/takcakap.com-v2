@@ -285,21 +285,7 @@ const issueCurlecRefundForOrder = async ({
                 voidSideEffects = await refundService.applyOrderVoidSideEffects(orderId, {
                     reason: normalizedReason || 'Refund'
                 });
-                if (voidSideEffects?.clawback?.success && voidSideEffects.clawback.points > 0) {
-                    try {
-                        if (typeof emailService.queuePointsClawbackEmail === 'function') {
-                            emailService.queuePointsClawbackEmail({
-                                userId: voidSideEffects.clawback.userId,
-                                orderId,
-                                points: voidSideEffects.clawback.points,
-                                balance: voidSideEffects.clawback.balance,
-                                debtPoints: voidSideEffects.clawback.debtPoints
-                            });
-                        }
-                    } catch (emailErr) {
-                        console.error('Failed to queue points clawback email:', emailErr);
-                    }
-                }
+                // Points clawback still runs above; no email is sent for balance changes.
                 if (voidSideEffects?.voucher?.success && voidSideEffects.voucher.code) {
                     try {
                         let voucherUserId =
