@@ -16,7 +16,10 @@ ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN npm run build \
+  && test -f dist/index.html \
+  && ls dist/assets/*.js >/dev/null 2>&1 \
+  && echo "dist build OK"
 
 # --- Production Stage ---
 FROM node:20-alpine AS runner
@@ -26,7 +29,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
+# Fail image if SPA bundle missing (blank page root cause)
+RUN test -f dist/index.html && ls dist/assets/*.js >/dev/null
 EXPOSE 3001
 
-# Migrations then API (serves SPA from dist)
+# Migrations then API (serves SPA from dist). If migrations fail, container exits.
 CMD ["sh", "-c", "node server/runMigrations.js && node server/index.js"]
