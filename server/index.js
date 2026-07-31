@@ -5,7 +5,7 @@
 'use strict';
 
 const path = require('path');
-const { createApp } = require('./createApp');
+const { createApp, getDistPath } = require('./createApp');
 const { validateStartupConfig, PORT, HOST } = require('./config');
 const { shouldAliasToApi, isBrowserDocumentRequest } = require('./middleware/apiAlias');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
@@ -35,27 +35,28 @@ app.use('/api', require('./loyaltyRoutes')(requireAuth, requireAdmin));
 
 // --- HANDLE CLIENT-SIDE ROUTING ---
 // Never SPA-fallback asset/extension requests (avoids MIME text/html on .js/.css → blank page).
-const distIndex = path.resolve(__dirname, '../dist/index.html');
+const distIndex = path.join(getDistPath(), 'index.html');
 app.get('*', (req, res) => {
     const p = req.path || '';
     if (p.startsWith('/api') || (shouldAliasToApi(p) && !isBrowserDocumentRequest(req))) {
         return res.status(404).json({ error: 'API route not found' });
     }
-    // Missing static files (hashed assets, sw, icons) must 404 — not return index.html
+    // Missing static files must 404 as plain text — never index.html
     if (
         p.startsWith('/assets/') ||
         p === '/sw.js' ||
+        p === '/sw.mjs' ||
         p === '/registerSW.js' ||
         p === '/manifest.webmanifest' ||
-        /\.[a-zA-Z0-9]{1,8}$/.test(p)
+        /\.[a-zA-Z0-9]{1,12}$/.test(p)
     ) {
-        return res.status(404).type('text').send('Not found');
+        return res.status(404).type('text/plain').send(`Not found: ${p}`);
     }
-    return res.sendFile(distIndex, (err) => {
+    return res.type('html').sendFile(distIndex, (err) => {
         if (err) {
             console.error('[spa] sendFile failed:', err.message, 'path=', distIndex);
             if (!res.headersSent) {
-                res.status(500).type('text').send('Frontend bundle missing (dist/index.html)');
+                res.status(500).type('text/plain').send('Frontend bundle missing (dist/index.html)');
             }
         }
     });

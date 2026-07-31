@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
         strategies: 'injectManifest',
         srcDir: 'src',
         filename: 'sw.ts',
+        // Self-destroying SW until deploy is stable — prevents stale SW returning
+        // index.html for /assets/*.js|css (blank page / wrong MIME type).
+        selfDestroying: true,
         registerType: 'autoUpdate',
         injectRegister: 'script',
         manifest: {
