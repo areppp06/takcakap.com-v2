@@ -145,6 +145,16 @@ function createApp() {
         });
     });
 
+    // Debug: R2 config presence (no secret values)
+    app.get('/api/debug/r2', (req, res) => {
+        try {
+            const r2 = require('./r2Service');
+            res.json(r2.getR2ConfigStatus());
+        } catch (e) {
+            res.status(500).json({ error: e?.message || String(e) });
+        }
+    });
+
     return app;
 }
 

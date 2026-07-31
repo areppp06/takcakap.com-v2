@@ -67,7 +67,12 @@ const request = async <T>(path: string, options?: RequestInit, query?: Record<st
             }
         }
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || payload.message || `Request failed: ${response.status}`);
+        const detail = payload.error || payload.message;
+        throw new Error(
+            detail
+                ? `${detail}${response.status ? ` (${response.status})` : ''}`
+                : `Request failed: ${response.status}`
+        );
     }
 
     // Clear reload timestamp on any successful API response

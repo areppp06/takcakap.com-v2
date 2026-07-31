@@ -1,7 +1,8 @@
 /**
  * Cloudflare R2 uploads via S3-compatible API.
- * Note: AWS SDK JS v3.729+ defaults integrity checksums that break R2 PutObject
- * unless requestChecksumCalculation / responseChecksumValidation are WHEN_REQUIRED.
+ *
+ * AWS SDK JS v3.729+ enables default request checksums that R2 may reject.
+ * We pin compatible settings AND strip checksum headers as a belt-and-suspenders fix.
  */
 'use strict';
 
@@ -22,6 +23,35 @@ const isR2Configured = () => {
     return Boolean(c.accountId && c.accessKeyId && c.secretAccessKey && c.bucketName && c.publicUrlPrefix);
 };
 
+const getR2ConfigStatus = () => {
+    const c = readR2Config();
+    return {
+        configured: isR2Configured(),
+        hasAccountId: Boolean(c.accountId),
+        hasAccessKeyId: Boolean(c.accessKeyId),
+        hasSecretAccessKey: Boolean(c.secretAccessKey),
+        hasBucketName: Boolean(c.bucketName),
+        hasPublicUrlPrefix: Boolean(c.publicUrlPrefix),
+        bucketName: c.bucketName || null,
+        publicUrlPrefix: c.publicUrlPrefix || null,
+        endpoint: c.accountId ? `https://${c.accountId}.r2.cloudflarestorage.com` : null,
+        accountIdPrefix: c.accountId ? `${c.accountId.slice(0, 6)}…` : null
+    };
+};
+
+const CHECKSUM_HEADER_RE = /^x-amz-checksum-/i;
+const stripChecksumMiddleware = (next) => async (args) => {
+    const headers = args?.request?.headers;
+    if (headers && typeof headers === 'object') {
+        for (const key of Object.keys(headers)) {
+            if (CHECKSUM_HEADER_RE.test(key) || key.toLowerCase() === 'x-amz-sdk-checksum-algorithm') {
+                delete headers[key];
+            }
+        }
+    }
+    return next(args);
+};
+
 const getS3Client = () => {
     if (s3Client) return s3Client;
 
@@ -39,9 +69,16 @@ const getS3Client = () => {
             accessKeyId: c.accessKeyId,
             secretAccessKey: c.secretAccessKey
         },
-        // Required for @aws-sdk/client-s3 >= 3.729 with Cloudflare R2
+        // Disable default flexible checksums (SDK >= 3.729)
         requestChecksumCalculation: 'WHEN_REQUIRED',
         responseChecksumValidation: 'WHEN_REQUIRED'
+    });
+
+    // Extra safety: remove any checksum headers the SDK still injects
+    s3Client.middlewareStack.add(stripChecksumMiddleware, {
+        step: 'build',
+        name: 'stripR2UnsupportedChecksumHeaders',
+        priority: 'high'
     });
 
     return s3Client;
@@ -50,10 +87,12 @@ const getS3Client = () => {
 const formatR2Error = (err) => {
     const code = err?.name || err?.Code || err?.code || '';
     const http = err?.$metadata?.httpStatusCode;
+    const requestId = err?.$metadata?.requestId;
     const msg = err?.message || String(err);
     const parts = [msg];
     if (code) parts.push(`code=${code}`);
     if (http) parts.push(`http=${http}`);
+    if (requestId) parts.push(`requestId=${requestId}`);
     return parts.join(' | ');
 };
 
@@ -61,6 +100,9 @@ const uploadFile = async (fileBuffer, fileName, mimeType) => {
     const c = readR2Config();
     if (!c.publicUrlPrefix) {
         throw new Error('R2_PUBLIC_URL_PREFIX is not configured');
+    }
+    if (!fileBuffer || !fileBuffer.length) {
+        throw new Error('Empty file buffer');
     }
 
     const client = getS3Client();
@@ -82,12 +124,15 @@ const uploadFile = async (fileBuffer, fileName, mimeType) => {
             })
         );
     } catch (err) {
-        console.error('[R2] PutObject failed:', formatR2Error(err), {
+        const detail = formatR2Error(err);
+        console.error('[R2] PutObject failed:', detail, {
             bucket: c.bucketName,
             key,
+            bytes: fileBuffer.length,
+            mimeType,
             endpoint: `https://${c.accountId}.r2.cloudflarestorage.com`
         });
-        throw new Error(`R2 upload failed: ${formatR2Error(err)}`);
+        throw new Error(`R2 upload failed: ${detail}`);
     }
 
     return `${c.publicUrlPrefix}/${key}`;
@@ -113,7 +158,6 @@ const deleteFile = async (imageUrl) => {
         );
     } catch (err) {
         console.error('[R2] DeleteObject failed:', formatR2Error(err), { key });
-        // Non-fatal for menu updates
     }
 };
 
@@ -121,7 +165,7 @@ module.exports = {
     uploadFile,
     deleteFile,
     isR2Configured,
-    // for tests / debug
+    getR2ConfigStatus,
     _resetClientForTests: () => {
         s3Client = null;
     }

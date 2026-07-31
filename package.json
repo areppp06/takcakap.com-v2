@@ -21,7 +21,7 @@
     "start:prod": "node server/index.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1061.0",
+    "@aws-sdk/client-s3": "^3.726.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
