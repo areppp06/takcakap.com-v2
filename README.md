@@ -2,13 +2,32 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# TakCakap v2 — Full Stack Single Restaurant Ordering System
 
-This contains everything you need to run your app locally.
+TakCakap v2 is a professional, full-stack food delivery and restaurant management system built for single-restaurant operations in Malaysia. It features automated Lalamove delivery fulfillment, Curlec (Razorpay MY) payment gateway integration, real-time admin order board via SSE, and a customer loyalty points program.
 
-View your app in AI Studio: https://ai.studio/apps/temp/1
+---
 
-## Run Locally
+## 📚 Official Documentation Suite
+
+Comprehensive, professional documentation is available in the [`docs/`](docs/) directory:
+
+1. **[Operational & Production Guide](docs/OPERATIONAL_GUIDE.md)**
+   - Plain English guide for store owners, managers, and cashiers.
+   - Explains what the system is, core features, day-to-day store operations, managing orders, refunds, opening/closing hours, pause switch, loyalty points, vouchers, and sales CSV exports.
+
+2. **[Developer & Maintenance Guide](docs/DEVELOPER_AND_MAINTENANCE_GUIDE.md)**
+   - Complete technical reference for software engineers and maintainers.
+   - Codebase structure, Express architecture, MariaDB `FOR UPDATE` transaction locks, migration runner, Curlec & Lalamove state machines, SSE stream bus, unit testing, and maintenance playbook.
+
+3. **[Deployment & Setup Guide](docs/DEPLOYMENT_AND_SETUP_GUIDE.md)**
+   - Professional end-to-end setup guide for local dev and production servers.
+   - Hardware requirements, complete `.env` reference table, Ubuntu + Nginx + PM2 + SSL (Certbot) setup, Docker deployment, and API integrations setup (Curlec, Lalamove, Cloudflare R2, VAPID WebPush, SMTP, Google OAuth).
+
+---
+
+## Quick Start (Local Development)
+
 
 **Prerequisites:**  Node.js
 
