@@ -44,6 +44,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Soften flaky Docker Hub metadata timeouts on GH runners
+          provenance: false
           # Vite bakes these at build time. Prefer repository Variables (or Secrets) in GitHub:
           # Settings → Secrets and variables → Actions → Variables: VITE_GOOGLE_CLIENT_ID, etc.
           build-args: |
