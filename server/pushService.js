@@ -40,7 +40,8 @@ const resolveFirebaseServiceAccount = () => {
     ) {
         rawJson = rawJson.slice(1, -1).trim();
     }
-    // Some UIs double-escape newlines as \\n — normalize private_key style escapes after parse fails once
+
+    let envError = null;
     if (rawJson) {
         try {
             if (rawJson.startsWith('{')) {
@@ -64,9 +65,8 @@ const resolveFirebaseServiceAccount = () => {
                 // fall through
             }
             const preview = rawJson.slice(0, 24).replace(/\s+/g, ' ');
-            throw new Error(
-                `FIREBASE_SERVICE_ACCOUNT_JSON is invalid (len=${rawJson.length}, starts=${JSON.stringify(preview)}): ${err.message}`
-            );
+            envError = `FIREBASE_SERVICE_ACCOUNT_JSON is invalid (len=${rawJson.length}, starts=${JSON.stringify(preview)}): ${err.message}`;
+            console.warn(`⚠️ ${envError} — will try GOOGLE_APPLICATION_CREDENTIALS / legacy file fallback.`);
         }
     }
 
@@ -76,7 +76,11 @@ const resolveFirebaseServiceAccount = () => {
             ? credentialsPath
             : path.resolve(process.cwd(), credentialsPath);
         if (!fs.existsSync(resolved)) {
-            throw new Error(`GOOGLE_APPLICATION_CREDENTIALS file not found: ${resolved}`);
+            throw new Error(
+                envError
+                    ? `${envError}; GOOGLE_APPLICATION_CREDENTIALS file not found: ${resolved}`
+                    : `GOOGLE_APPLICATION_CREDENTIALS file not found: ${resolved}`
+            );
         }
         return JSON.parse(fs.readFileSync(resolved, 'utf8'));
     }
@@ -84,11 +88,14 @@ const resolveFirebaseServiceAccount = () => {
     const legacyPath = path.resolve(__dirname, 'firebase-service-account.json');
     if (fs.existsSync(legacyPath)) {
         console.warn(
-            '⚠️ Loading Firebase credentials from server/firebase-service-account.json (legacy). Prefer FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS and do not commit this file.'
+            '⚠️ Loading Firebase credentials from server/firebase-service-account.json (legacy). Prefer a valid FIREBASE_SERVICE_ACCOUNT_JSON env and do not commit this file.'
         );
         return JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
     }
 
+    if (envError) {
+        throw new Error(envError);
+    }
     return null;
 };
 
