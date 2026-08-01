@@ -234,13 +234,48 @@ export const api = {
                 body: JSON.stringify({ email, password })
             }
         ),
-    registerAdminFcmToken: async (token: string): Promise<{ success: boolean }> =>
-        request<{ success: boolean }>(
+    registerAdminFcmToken: async (token: string, deviceInfo?: string): Promise<{ success: boolean; armed?: boolean }> =>
+        request<{ success: boolean; armed?: boolean }>(
             adminApiPath('/admin/fcm-token'),
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token })
+                body: JSON.stringify({ token, deviceInfo: deviceInfo || undefined })
+            }
+        ),
+    unregisterAdminFcmToken: async (token?: string): Promise<{ success: boolean; deleted?: number }> =>
+        request<{ success: boolean; deleted?: number }>(
+            adminApiPath('/admin/fcm-token'),
+            {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(token ? { token } : {})
+            }
+        ),
+    getAdminFcmStatus: async (): Promise<{
+        firebaseReady: boolean;
+        tokenCount: number;
+        tokens: Array<{
+            tokenPreview: string;
+            userId: number | null;
+            deviceInfo: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    }> => request(adminApiPath('/admin/fcm-status')),
+    testAdminFcm: async (): Promise<{
+        success: boolean;
+        tokenCount?: number;
+        successCount?: number;
+        failureCount?: number;
+        error?: string;
+    }> =>
+        request(
+            adminApiPath('/admin/fcm-test'),
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
             }
         ),
     getMe: async (): Promise<{ user: any }> => request<{ user: any }>('/auth/me'),

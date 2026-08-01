@@ -6,6 +6,7 @@ import BrandLogo from '../components/BrandLogo';
 import AdminMobileNav from '../components/AdminMobileNav';
 import AdminSidebarNav from '../components/AdminSidebarNav';
 import AdminSidebarFooter from '../components/AdminSidebarFooter';
+import AdminKitchenAlerts from '../components/AdminKitchenAlerts';
 import { formatCurrency } from '../utils/currency';
 import { AdminSalesOverview } from '../types';
 
@@ -232,6 +233,8 @@ const AdminDashboard: React.FC = () => {
                 {exportError && <p className="text-xs text-rose-600 font-semibold">{exportError}</p>}
              </div>
           </header>
+
+          <AdminKitchenAlerts />
 
           {/* Stats Grid */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">

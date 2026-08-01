@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { isNativeApp, stopNativeAlarm } from '../utils/nativeBridge';
 
 const AdminOrderAlert: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -11,6 +12,7 @@ const AdminOrderAlert: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const soundUrl = (import.meta as any).env.VITE_ADMIN_ORDER_ALERT_SOUND_URL || '/admin-order-alert.mp3';
+  const nativeShell = isNativeApp();
 
   const stopAudio = () => {
     if (!audioRef.current) return;
@@ -19,6 +21,10 @@ const AdminOrderAlert: React.FC = () => {
   };
 
   const startAudio = async () => {
+    // Inside the APK, native FCM alarm is the primary ringer.
+    // Browser-only admin still uses looping HTML audio.
+    if (nativeShell) return;
+
     if (!audioRef.current) {
       const audio = new Audio(soundUrl);
       audio.preload = 'auto';
@@ -33,21 +39,28 @@ const AdminOrderAlert: React.FC = () => {
     }
   };
 
+  const dismissAlert = () => {
+    stopNativeAlarm();
+    stopAudio();
+    setIsOpen(false);
+    navigate('/admin/orders');
+  };
+
   useEffect(() => {
     if (isOpen) {
       startAudio();
       return;
     }
     stopAudio();
-  }, [isOpen, soundUrl]);
+  }, [isOpen, soundUrl, nativeShell]);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin' || !user?.id) {
       setIsOpen(false);
       stopAudio();
+      stopNativeAlarm();
       return;
     }
-
 
     let disposed = false;
     let streamAbortController: AbortController | null = null;
@@ -152,12 +165,13 @@ const AdminOrderAlert: React.FC = () => {
           <span className="material-symbols-outlined">notifications_active</span>
         </div>
         <p className="text-xl font-extrabold text-[#0d1c0d] dark:text-white">Order received!..</p>
-        <p className="text-sm text-slate-500 mt-1">New order just came in.</p>
+        <p className="text-sm text-slate-500 mt-1">
+          {nativeShell
+            ? 'Native alarm is ringing. Tap Okay to stop it and open orders.'
+            : 'New order just came in.'}
+        </p>
         <button
-          onClick={() => {
-            setIsOpen(false);
-            navigate('/admin/orders');
-          }}
+          onClick={dismissAlert}
           className="mt-5 w-full py-2.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-colors"
         >
           Okay

@@ -138,28 +138,33 @@ async function sendPushToUser(userId, title, body, url = '/') {
     }
 }
 
+function isFirebaseReady() {
+    return Boolean(firebaseApp);
+}
+
 /**
  * Broadcasts an FCM push notification to all registered admin devices.
- * Used for the Android wrapper app to trigger its repeating alarm.
+ * Data-only payload so Android AdminMessagingService always runs in background.
  *
  * @param {string} title - Notification title
  * @param {string} body - Notification body
  * @param {object} data - Extra payload data (e.g., type: 'new_order')
+ * @returns {Promise<{ successCount: number, failureCount: number, tokenCount: number }>}
  */
 async function sendFcmToAdmins(title, body, data = {}) {
     if (!firebaseApp) {
         console.warn('⚠️ sendFcmToAdmins: Firebase not initialized. Skipping.');
-        return;
+        return { successCount: 0, failureCount: 0, tokenCount: 0, skipped: 'firebase_not_ready' };
     }
 
     try {
         const [rows] = await db.query('SELECT token FROM admin_fcm_tokens');
         if (rows.length === 0) {
             console.warn('⚠️ sendFcmToAdmins: No admin FCM tokens registered in DB. Skipping.');
-            return;
+            return { successCount: 0, failureCount: 0, tokenCount: 0, skipped: 'no_tokens' };
         }
 
-        const tokens = rows.map(r => r.token);
+        const tokens = rows.map(r => r.token).filter(Boolean);
         console.log(`📤 sendFcmToAdmins: Sending to ${tokens.length} device(s). Title: "${title}"`);
 
         // FCM data values MUST all be strings — stringify any non-strings
@@ -185,7 +190,6 @@ async function sendFcmToAdmins(title, body, data = {}) {
 
         console.log(`📤 sendFcmToAdmins: Results — success: ${response.successCount}, failures: ${response.failureCount}`);
 
-        // Log each individual result
         response.responses.forEach((resp, idx) => {
             if (resp.success) {
                 console.log(`  ✅ Token[${idx}]: delivered (messageId: ${resp.messageId})`);
@@ -194,7 +198,6 @@ async function sendFcmToAdmins(title, body, data = {}) {
             }
         });
 
-        // Remove invalid tokens (e.g. app uninstalled)
         if (response.failureCount > 0) {
             const failedTokens = [];
             response.responses.forEach((resp, idx) => {
@@ -212,12 +215,20 @@ async function sendFcmToAdmins(title, body, data = {}) {
                 await db.query('DELETE FROM admin_fcm_tokens WHERE token IN (?)', [failedTokens]);
             }
         }
+
+        return {
+            successCount: response.successCount,
+            failureCount: response.failureCount,
+            tokenCount: tokens.length
+        };
     } catch (err) {
         console.error('❌ sendFcmToAdmins EXCEPTION:', err);
+        return { successCount: 0, failureCount: 0, tokenCount: 0, error: err.message };
     }
 }
 
 module.exports = {
     sendPushToUser,
-    sendFcmToAdmins
+    sendFcmToAdmins,
+    isFirebaseReady
 };

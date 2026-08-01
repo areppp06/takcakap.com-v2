@@ -11,10 +11,9 @@ const {
 } = require('../../config');
 const { requireAdmin, requireAdminStreamToken, signAdminStreamToken } = require('../../middleware/auth');
 const { orderEvents } = require('../../services/orders/orderEvents');
-const { sendFcmToAdmins } = require('../../pushService');
+const { sendFcmToAdmins, isFirebaseReady } = require('../../pushService');
 
 module.exports = function register(app) {
-
 
     app.post('/api/admin/orders/stream-token', requireAdmin, async (req, res) => {
         try {
@@ -31,38 +30,124 @@ module.exports = function register(app) {
 
     app.post('/api/admin/fcm-token', requireAdmin, async (req, res) => {
         try {
-            const { token } = req.body;
+            const token = String(req.body?.token || '').trim();
+            const deviceInfo = String(req.body?.deviceInfo || req.body?.device_info || '').trim().slice(0, 255);
+
             if (!token) {
                 return res.status(400).json({ error: 'Token is required' });
             }
-            
-            // Upsert the token
+            if (token.length > 512) {
+                return res.status(400).json({ error: 'Token is too long' });
+            }
+
+            const userId = Number(req.user?.id) || null;
+
             await db.query(`
-                INSERT INTO admin_fcm_tokens (token) VALUES (?)
-                ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
-            `, [token]);
-            
-            return res.json({ success: true });
+                INSERT INTO admin_fcm_tokens (token, user_id, device_info)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    updated_at = CURRENT_TIMESTAMP,
+                    user_id = VALUES(user_id),
+                    device_info = COALESCE(NULLIF(VALUES(device_info), ''), device_info)
+            `, [token, userId, deviceInfo || null]);
+
+            console.log(
+                `✅ admin FCM token registered user=${userId || 'n/a'} token=${token.substring(0, 16)}... device=${deviceInfo || 'n/a'}`
+            );
+
+            return res.json({ success: true, armed: true });
         } catch (error) {
             console.error('Failed to register admin FCM token:', error);
             return res.status(500).json({ error: 'Failed to register admin FCM token' });
         }
     });
 
-    // DEBUG: Test FCM push to all registered admin devices
+    app.delete('/api/admin/fcm-token', requireAdmin, async (req, res) => {
+        try {
+            const token = String(req.body?.token || '').trim();
+            const userId = Number(req.user?.id) || null;
+            let deleted = 0;
+
+            if (token) {
+                const [result] = await db.query(
+                    'DELETE FROM admin_fcm_tokens WHERE token = ?',
+                    [token]
+                );
+                deleted = result?.affectedRows || 0;
+            } else if (userId) {
+                const [result] = await db.query(
+                    'DELETE FROM admin_fcm_tokens WHERE user_id = ?',
+                    [userId]
+                );
+                deleted = result?.affectedRows || 0;
+            } else {
+                return res.status(400).json({ error: 'Token or authenticated user is required' });
+            }
+
+            console.log(`🗑️ admin FCM token unregister deleted=${deleted} user=${userId || 'n/a'}`);
+            return res.json({ success: true, deleted });
+        } catch (error) {
+            console.error('Failed to unregister admin FCM token:', error);
+            return res.status(500).json({ error: 'Failed to unregister admin FCM token' });
+        }
+    });
+
+    app.get('/api/admin/fcm-status', requireAdmin, async (req, res) => {
+        try {
+            const [rows] = await db.query(
+                'SELECT token, user_id, device_info, created_at, updated_at FROM admin_fcm_tokens ORDER BY updated_at DESC'
+            );
+            return res.json({
+                firebaseReady: isFirebaseReady(),
+                tokenCount: rows.length,
+                tokens: rows.map((row) => ({
+                    tokenPreview: String(row.token || '').substring(0, 16) + '...',
+                    userId: row.user_id,
+                    deviceInfo: row.device_info || null,
+                    createdAt: row.created_at,
+                    updatedAt: row.updated_at
+                }))
+            });
+        } catch (error) {
+            console.error('Failed to load admin FCM status:', error);
+            return res.status(500).json({ error: 'Failed to load admin FCM status' });
+        }
+    });
+
     app.post('/api/admin/fcm-test', requireAdmin, async (req, res) => {
         try {
             console.log('🧪 FCM TEST: Manually triggering test push to all admin devices...');
+            if (!isFirebaseReady()) {
+                return res.status(503).json({
+                    success: false,
+                    error: 'Firebase Admin is not initialized on the server'
+                });
+            }
+
             const [rows] = await db.query('SELECT token FROM admin_fcm_tokens');
             console.log(`🧪 FCM TEST: Found ${rows.length} token(s) in database`);
             rows.forEach((r, i) => console.log(`  Token[${i}]: ${r.token.substring(0, 20)}...`));
-            
-            await sendFcmToAdmins(
-                'TEST ALARM 🧪',
+
+            if (rows.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'No admin FCM tokens registered. Open the Android app and log in as admin first.',
+                    tokenCount: 0
+                });
+            }
+
+            const result = await sendFcmToAdmins(
+                'TEST ALARM',
                 'This is a test notification. You should hear a looping alarm!',
                 { type: 'new_order', orderId: '0' }
             );
-            return res.json({ success: true, tokenCount: rows.length });
+
+            return res.json({
+                success: true,
+                tokenCount: rows.length,
+                successCount: result?.successCount ?? 0,
+                failureCount: result?.failureCount ?? 0
+            });
         } catch (error) {
             console.error('FCM TEST failed:', error);
             return res.status(500).json({ error: error.message });

@@ -1,91 +1,96 @@
 /**
  * Native App Bridge - Web Side
- * 
- * Provides helper functions for the admin web app to communicate
- * with the native Android wrapper (Capacitor) when running inside it.
- * 
- * Safe to import everywhere - all functions are no-ops when running in a browser.
+ *
+ * Talks to window.TakCakapNative (Java JavascriptInterface) inside the APK.
+ * Safe no-ops in a normal browser.
  */
 
-// ─── Detection ───────────────────────────────────────────────────────────────
-
-/** Returns true when the web app is running inside the Capacitor native shell. */
 export function isNativeApp(): boolean {
-  return !!(window as any).Capacitor?.isNativePlatform?.() ||
-    !!(window as any).TakCakapNative;
-}
-
-// ─── Outgoing Messages (Web → Native) ────────────────────────────────────────
-
-function sendToNative(action: string, payload: Record<string, unknown> = {}) {
-  if (!isNativeApp()) return;
   try {
-    window.postMessage(
-      JSON.stringify({ source: 'takcakap-admin', action, ...payload }),
-      '*'
-    );
+    return !!(window as any).Capacitor?.isNativePlatform?.() ||
+      !!(window as any).TakCakapNative;
   } catch {
-    // Silently ignore - we're probably not in the native shell
+    return false;
   }
 }
 
-/** Tell the native app to stop the repeating alarm. */
+function native(): any | null {
+  try {
+    return (window as any).TakCakapNative || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stop the native looping order alarm (fixed notification id on Android). */
 export function stopNativeAlarm() {
-  if (isNativeApp() && (window as any).TakCakapNative) {
-    (window as any).TakCakapNative.stopAlarm();
+  const bridge = native();
+  if (!bridge?.stopAlarm) return;
+  try {
+    bridge.stopAlarm();
+  } catch (err) {
+    console.error('[nativeBridge] stopAlarm failed', err);
   }
 }
 
-/** Tell the native app the admin accepted an order (stops alarm too). */
+/** Alias used when accepting an order. */
 export function acceptOrderNative() {
   stopNativeAlarm();
 }
 
-/** Request the FCM token synchronously from the native app. */
+/** Sync FCM token from native SharedPreferences. */
 export function getFcmTokenSync(): string | null {
-  if (isNativeApp() && (window as any).TakCakapNative) {
-    return (window as any).TakCakapNative.getFcmToken();
+  const bridge = native();
+  if (!bridge?.getFcmToken) return null;
+  try {
+    const token = bridge.getFcmToken();
+    if (typeof token === 'string' && token.trim()) return token.trim();
+    return null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
-/** Fire a test alarm on the native side. */
+/** Local native test alarm (does not hit the server). */
 export function testNativeAlarm() {
-  sendToNative('test-alarm');
+  const bridge = native();
+  if (bridge?.testAlarm) {
+    try {
+      bridge.testAlarm();
+      return;
+    } catch (err) {
+      console.error('[nativeBridge] testAlarm failed', err);
+    }
+  }
 }
 
-// ─── Incoming Messages (Native → Web) ────────────────────────────────────────
+export type NativeAlertStatus = {
+  hasToken: boolean;
+  notificationsEnabled: boolean;
+  batteryUnrestricted: boolean;
+  alarmActive: boolean;
+  armed: boolean;
+  tokenPreview: string;
+};
 
-export type NativeMessageHandler = (action: string, payload: any) => void;
-
-let messageListener: ((e: MessageEvent) => void) | null = null;
-
-/**
- * Register a listener for messages from the native app.
- * Returns an unsubscribe function.
- */
-export function onNativeMessage(handler: NativeMessageHandler): () => void {
-  // Remove any previous listener
-  if (messageListener) {
-    window.removeEventListener('message', messageListener);
+export function getNativeAlertStatus(): NativeAlertStatus | null {
+  const bridge = native();
+  if (!bridge?.getAlertStatus) return null;
+  try {
+    const raw = bridge.getAlertStatus();
+    if (!raw || typeof raw !== 'string') return null;
+    return JSON.parse(raw) as NativeAlertStatus;
+  } catch {
+    return null;
   }
+}
 
-  messageListener = (event: MessageEvent) => {
-    try {
-      const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      if (msg?.source !== 'takcakap-native') return;
-      handler(msg.action, msg.payload);
-    } catch {
-      // Not a JSON message from native, ignore
-    }
-  };
-
-  window.addEventListener('message', messageListener);
-
-  return () => {
-    if (messageListener) {
-      window.removeEventListener('message', messageListener);
-      messageListener = null;
-    }
-  };
+export function isNativeAlarmActive(): boolean {
+  const bridge = native();
+  if (!bridge?.isAlarmActive) return false;
+  try {
+    return Boolean(bridge.isAlarmActive());
+  } catch {
+    return false;
+  }
 }
