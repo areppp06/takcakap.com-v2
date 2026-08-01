@@ -10,14 +10,16 @@ SSE is for the live dashboard only. It does **not** ring when the app is dead.
 
 | Event | Behavior |
 |-------|----------|
-| Admin login / resume in APK | Upsert token + `user_id` + `device_info`; **delete other tokens for same user** |
+| Admin login / resume / online in APK | Upsert token + `user_id` + `device_info`; **delete other tokens for same user** |
+| Heartbeat (while logged in) | Re-POST same token at least every **6 hours** → bumps `updated_at` (survives quiet periods) |
+| After long offline | Next app open or `online` event re-registers immediately — no forced logout |
 | Admin logout | DELETE this device token |
 | New order / test FCM | Send only tokens with `updated_at` within **14 days** (`ADMIN_FCM_TOKEN_MAX_AGE_DAYS`) |
 | FCM invalid token | DELETE row immediately |
 | Server start + every 6h | Prune tokens older than 14 days |
 | Manual | `POST /api/admin/fcm-prune` |
 
-After a full reset: `DELETE FROM admin_fcm_tokens;` then kitchen APK login once.
+**Offline note:** No network = no FCM (unavoidable). After any length offline, open the APK once (or leave it running so `online` fires) → heartbeat re-arms. No weekly re-login required.
 
 ## Ship checklist
 

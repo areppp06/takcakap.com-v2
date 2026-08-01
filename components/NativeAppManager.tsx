@@ -7,13 +7,24 @@ import {
 } from '../utils/nativeBridge';
 import { api } from '../services/api';
 
+/** Minimum gap between successful server POSTs (avoid spam). */
+const MIN_POST_GAP_MS = 60 * 1000;
+/** Force a server touch at least this often while logged in (bumps updated_at). */
+const HEARTBEAT_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** How often we wake up to check if heartbeat is due / token rotated. */
+const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+type RegisterReason = 'login' | 'resume' | 'heartbeat' | 'online' | 'token_change';
+
 /**
- * Registers / unregisters the device FCM token with the backend when running
- * inside the TakCakap Admin Android shell. Invisible component.
+ * Keeps this device's FCM token alive on the server while the admin APK session
+ * is active. Heartbeat re-POSTs the same token so 14d freshness never expires
+ * on a live kitchen phone — including after long offline periods (on next open/online).
  */
 export const NativeAppManager: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const registeredTokenRef = useRef<string | null>(null);
+  const lastPostAtRef = useRef(0);
   const lastAuthRef = useRef(false);
   const [banner, setBanner] = useState<string | null>(null);
 
@@ -41,10 +52,11 @@ export const NativeAppManager: React.FC = () => {
         console.error('[NativeAppManager] Unregister failed', err);
       } finally {
         registeredTokenRef.current = null;
+        lastPostAtRef.current = 0;
       }
     };
 
-    const registerToken = async (force = false) => {
+    const registerToken = async (reason: RegisterReason) => {
       if (registerInFlight) return;
       registerInFlight = true;
       try {
@@ -57,6 +69,14 @@ export const NativeAppManager: React.FC = () => {
         }
 
         if (!isAuthenticated || user?.role !== 'admin') {
+          return;
+        }
+
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          console.log(`[NativeAppManager] Offline — defer register (${reason})`);
+          if (!cancelled) {
+            setBanner('Order alerts paused: phone is offline. Will re-arm when online.');
+          }
           return;
         }
 
@@ -77,15 +97,41 @@ export const NativeAppManager: React.FC = () => {
           return;
         }
 
-        if (!force && registeredTokenRef.current === token) {
+        const now = Date.now();
+        const sameToken = registeredTokenRef.current === token;
+        const msSincePost = now - lastPostAtRef.current;
+        const heartbeatDue = msSincePost >= HEARTBEAT_INTERVAL_MS || lastPostAtRef.current === 0;
+        const tooSoon = lastPostAtRef.current > 0 && msSincePost < MIN_POST_GAP_MS;
+
+        // Always POST on login / coming online / token change.
+        // Resume + heartbeat: POST if never posted, token changed, or heartbeat due.
+        let shouldPost = false;
+        if (!sameToken) {
+          shouldPost = true;
+          reason = registeredTokenRef.current ? 'token_change' : reason;
+        } else if (reason === 'login' || reason === 'online') {
+          shouldPost = !tooSoon || lastPostAtRef.current === 0;
+        } else if (reason === 'resume' || reason === 'heartbeat') {
+          shouldPost = heartbeatDue && !tooSoon;
+        }
+
+        // Resume after long offline: lastPost is old → heartbeatDue true → post
+        if (reason === 'resume' && heartbeatDue) {
+          shouldPost = true;
+        }
+
+        if (!shouldPost) {
+          console.log(
+            `[NativeAppManager] Skip POST (${reason}) sameToken=${sameToken} sincePostMs=${msSincePost}`
+          );
           return;
         }
 
         const deviceInfo = [
           'android',
-          navigator.userAgent.includes('Android') ? 'webview' : 'native',
-          (navigator as any).userAgentData?.platform || ''
-        ].filter(Boolean).join(';').slice(0, 255);
+          'heartbeat',
+          navigator.userAgent.includes('Android') ? 'webview' : 'native'
+        ].join(';').slice(0, 255);
 
         let lastError: unknown = null;
         for (let retry = 1; retry <= 5; retry++) {
@@ -93,7 +139,8 @@ export const NativeAppManager: React.FC = () => {
           try {
             await api.registerAdminFcmToken(token, deviceInfo);
             registeredTokenRef.current = token;
-            console.log('[NativeAppManager] FCM token registered with backend');
+            lastPostAtRef.current = Date.now();
+            console.log(`[NativeAppManager] FCM token registered (${reason})`);
             if (!cancelled) {
               const status = getNativeAlertStatus();
               if (status && !status.notificationsEnabled) {
@@ -126,27 +173,36 @@ export const NativeAppManager: React.FC = () => {
       void unregisterIfNeeded();
       setBanner(null);
     } else if (isAuthedAdmin) {
-      void registerToken(false);
+      void registerToken('login');
     }
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible' && isAuthedAdmin && !cancelled) {
-        void registerToken(false);
+        void registerToken('resume');
       }
     };
-    document.addEventListener('visibilitychange', onVisibility);
 
-    // Slow periodic re-check (token rotation) — not every 10s spam
+    const onOnline = () => {
+      if (isAuthedAdmin && !cancelled) {
+        console.log('[NativeAppManager] Network online — re-arm FCM token');
+        void registerToken('online');
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', onOnline);
+
     const interval = window.setInterval(() => {
       if (!cancelled && isAuthedAdmin) {
-        void registerToken(false);
+        void registerToken('heartbeat');
       }
-    }, 120000);
+    }, CHECK_INTERVAL_MS);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', onOnline);
     };
   }, [isAuthenticated, user?.role]);
 
