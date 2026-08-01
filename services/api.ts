@@ -255,6 +255,8 @@ export const api = {
     getAdminFcmStatus: async (): Promise<{
         firebaseReady: boolean;
         tokenCount: number;
+        freshTokenCount?: number;
+        maxAgeDays?: number;
         tokens: Array<{
             tokenPreview: string;
             userId: number | null;

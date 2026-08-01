@@ -125,6 +125,17 @@ const ADMIN_ORDER_STREAM_TOKEN_TTL_SECONDS = Math.max(
     30,
     Number.parseInt(String(process.env.ADMIN_ORDER_STREAM_TOKEN_TTL_SECONDS || '120'), 10) || 120
 );
+/** Drop / ignore admin FCM tokens not refreshed within this many days. */
+const ADMIN_FCM_TOKEN_MAX_AGE_DAYS = Math.max(
+    1,
+    Number.parseInt(String(process.env.ADMIN_FCM_TOKEN_MAX_AGE_DAYS || '14'), 10) || 14
+);
+/** How often to run stale-token prune (ms). Default 6 hours. */
+const ADMIN_FCM_TOKEN_PRUNE_INTERVAL_MS = Math.max(
+    60 * 1000,
+    Number.parseInt(String(process.env.ADMIN_FCM_TOKEN_PRUNE_INTERVAL_MS || String(6 * 60 * 60 * 1000)), 10)
+        || 6 * 60 * 60 * 1000
+);
 const AUTH_RATE_LIMIT_WINDOW_MS = Math.max(
     30 * 1000,
     Number.parseInt(String(process.env.AUTH_RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000)), 10) || 15 * 60 * 1000
@@ -297,6 +308,8 @@ module.exports = {
     ADMIN_ORDER_EVENTS_RETRY_MS,
     ADMIN_ORDER_EVENTS_HEARTBEAT_MS,
     ADMIN_ORDER_STREAM_TOKEN_TTL_SECONDS,
+    ADMIN_FCM_TOKEN_MAX_AGE_DAYS,
+    ADMIN_FCM_TOKEN_PRUNE_INTERVAL_MS,
     AUTH_RATE_LIMIT_WINDOW_MS,
     AUTH_RATE_LIMIT_MAX_ATTEMPTS,
     WEBHOOK_RATE_LIMIT_WINDOW_MS,

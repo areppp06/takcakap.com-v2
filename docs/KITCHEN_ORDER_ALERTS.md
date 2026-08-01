@@ -6,6 +6,19 @@
 
 SSE is for the live dashboard only. It does **not** ring when the app is dead.
 
+## Token lifecycle (systematic)
+
+| Event | Behavior |
+|-------|----------|
+| Admin login / resume in APK | Upsert token + `user_id` + `device_info`; **delete other tokens for same user** |
+| Admin logout | DELETE this device token |
+| New order / test FCM | Send only tokens with `updated_at` within **14 days** (`ADMIN_FCM_TOKEN_MAX_AGE_DAYS`) |
+| FCM invalid token | DELETE row immediately |
+| Server start + every 6h | Prune tokens older than 14 days |
+| Manual | `POST /api/admin/fcm-prune` |
+
+After a full reset: `DELETE FROM admin_fcm_tokens;` then kitchen APK login once.
+
 ## Ship checklist
 
 1. Run migrations (includes `014_admin_fcm_tokens_hardening.js`)

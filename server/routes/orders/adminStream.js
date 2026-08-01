@@ -11,7 +11,12 @@ const {
 } = require('../../config');
 const { requireAdmin, requireAdminStreamToken, signAdminStreamToken } = require('../../middleware/auth');
 const { orderEvents } = require('../../services/orders/orderEvents');
-const { sendFcmToAdmins, isFirebaseReady } = require('../../pushService');
+const {
+    sendFcmToAdmins,
+    isFirebaseReady,
+    pruneStaleAdminFcmTokens,
+    getAdminFcmMaxAgeDays
+} = require('../../pushService');
 
 module.exports = function register(app) {
 
@@ -51,11 +56,21 @@ module.exports = function register(app) {
                     device_info = COALESCE(NULLIF(VALUES(device_info), ''), device_info)
             `, [token, userId, deviceInfo || null]);
 
+            // One active device token per admin user — drop ghosts from reinstalls
+            let replaced = 0;
+            if (userId) {
+                const [del] = await db.query(
+                    'DELETE FROM admin_fcm_tokens WHERE user_id = ? AND token <> ?',
+                    [userId, token]
+                );
+                replaced = del?.affectedRows || 0;
+            }
+
             console.log(
-                `✅ admin FCM token registered user=${userId || 'n/a'} token=${token.substring(0, 16)}... device=${deviceInfo || 'n/a'}`
+                `✅ admin FCM token registered user=${userId || 'n/a'} token=${token.substring(0, 16)}... device=${deviceInfo || 'n/a'} replacedOthers=${replaced}`
             );
 
-            return res.json({ success: true, armed: true });
+            return res.json({ success: true, armed: true, replacedOthers: replaced });
         } catch (error) {
             console.error('Failed to register admin FCM token:', error);
             return res.status(500).json({ error: 'Failed to register admin FCM token' });
@@ -94,12 +109,20 @@ module.exports = function register(app) {
 
     app.get('/api/admin/fcm-status', requireAdmin, async (req, res) => {
         try {
+            const days = getAdminFcmMaxAgeDays();
             const [rows] = await db.query(
                 'SELECT token, user_id, device_info, created_at, updated_at FROM admin_fcm_tokens ORDER BY updated_at DESC'
             );
+            const [freshRows] = await db.query(
+                `SELECT COUNT(*) AS c FROM admin_fcm_tokens
+                 WHERE updated_at >= (NOW() - INTERVAL ${days} DAY)`
+            );
+            const freshCount = Number(freshRows?.[0]?.c || 0);
             return res.json({
                 firebaseReady: isFirebaseReady(),
                 tokenCount: rows.length,
+                freshTokenCount: freshCount,
+                maxAgeDays: days,
                 tokens: rows.map((row) => ({
                     tokenPreview: String(row.token || '').substring(0, 16) + '...',
                     userId: row.user_id,
@@ -114,25 +137,27 @@ module.exports = function register(app) {
         }
     });
 
+    app.post('/api/admin/fcm-prune', requireAdmin, async (req, res) => {
+        try {
+            const deleted = await pruneStaleAdminFcmTokens();
+            return res.json({
+                success: true,
+                deleted,
+                maxAgeDays: getAdminFcmMaxAgeDays()
+            });
+        } catch (error) {
+            console.error('FCM prune failed:', error);
+            return res.status(500).json({ error: error.message });
+        }
+    });
+
     app.post('/api/admin/fcm-test', requireAdmin, async (req, res) => {
         try {
-            console.log('🧪 FCM TEST: Manually triggering test push to all admin devices...');
+            console.log('🧪 FCM TEST: Manually triggering test push to fresh admin devices...');
             if (!isFirebaseReady()) {
                 return res.status(503).json({
                     success: false,
                     error: 'Firebase Admin is not initialized on the server'
-                });
-            }
-
-            const [rows] = await db.query('SELECT token FROM admin_fcm_tokens');
-            console.log(`🧪 FCM TEST: Found ${rows.length} token(s) in database`);
-            rows.forEach((r, i) => console.log(`  Token[${i}]: ${r.token.substring(0, 20)}...`));
-
-            if (rows.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'No admin FCM tokens registered. Open the Android app and log in as admin first.',
-                    tokenCount: 0
                 });
             }
 
@@ -142,9 +167,18 @@ module.exports = function register(app) {
                 { type: 'new_order', orderId: '0' }
             );
 
+            if ((result?.tokenCount || 0) === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'No fresh admin FCM tokens. Open the Android app and log in as admin first.',
+                    tokenCount: 0,
+                    skipped: result?.skipped
+                });
+            }
+
             return res.json({
                 success: true,
-                tokenCount: rows.length,
+                tokenCount: result?.tokenCount ?? 0,
                 successCount: result?.successCount ?? 0,
                 failureCount: result?.failureCount ?? 0
             });

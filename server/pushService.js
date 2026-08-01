@@ -138,12 +138,62 @@ async function sendPushToUser(userId, title, body, url = '/') {
     }
 }
 
+const {
+    ADMIN_FCM_TOKEN_MAX_AGE_DAYS,
+    ADMIN_FCM_TOKEN_PRUNE_INTERVAL_MS
+} = require('./config');
+
 function isFirebaseReady() {
     return Boolean(firebaseApp);
 }
 
+function getAdminFcmMaxAgeDays() {
+    return Math.max(1, Number(ADMIN_FCM_TOKEN_MAX_AGE_DAYS) || 14);
+}
+
 /**
- * Broadcasts an FCM push notification to all registered admin devices.
+ * Delete admin FCM tokens not refreshed within ADMIN_FCM_TOKEN_MAX_AGE_DAYS.
+ * @returns {Promise<number>} deleted row count
+ */
+async function pruneStaleAdminFcmTokens() {
+    const days = getAdminFcmMaxAgeDays();
+    try {
+        const [result] = await db.query(
+            `DELETE FROM admin_fcm_tokens
+             WHERE updated_at < (NOW() - INTERVAL ${days} DAY)`
+        );
+        const deleted = result?.affectedRows || 0;
+        if (deleted > 0) {
+            console.log(`🗑️ pruneStaleAdminFcmTokens: removed ${deleted} token(s) older than ${days}d`);
+        }
+        return deleted;
+    } catch (err) {
+        console.error('pruneStaleAdminFcmTokens failed:', err?.message || err);
+        return 0;
+    }
+}
+
+let pruneTimer = null;
+
+/** Run prune once at startup, then on an interval. */
+function startAdminFcmTokenPruneWorker() {
+    if (pruneTimer) return;
+    const run = () => {
+        pruneStaleAdminFcmTokens().catch(() => {});
+    };
+    run();
+    pruneTimer = setInterval(run, ADMIN_FCM_TOKEN_PRUNE_INTERVAL_MS);
+    if (typeof pruneTimer.unref === 'function') {
+        pruneTimer.unref();
+    }
+    console.log(
+        `✅ Admin FCM token prune worker started (maxAge=${getAdminFcmMaxAgeDays()}d, every ${ADMIN_FCM_TOKEN_PRUNE_INTERVAL_MS}ms)`
+    );
+}
+
+/**
+ * Broadcasts an FCM push notification to fresh admin devices only
+ * (updated_at within ADMIN_FCM_TOKEN_MAX_AGE_DAYS).
  * Data-only payload so Android AdminMessagingService always runs in background.
  *
  * @param {string} title - Notification title
@@ -158,14 +208,21 @@ async function sendFcmToAdmins(title, body, data = {}) {
     }
 
     try {
-        const [rows] = await db.query('SELECT token FROM admin_fcm_tokens');
+        const days = getAdminFcmMaxAgeDays();
+        // Belt: never page tokens that have not been refreshed recently
+        const [rows] = await db.query(
+            `SELECT token FROM admin_fcm_tokens
+             WHERE updated_at >= (NOW() - INTERVAL ${days} DAY)`
+        );
         if (rows.length === 0) {
-            console.warn('⚠️ sendFcmToAdmins: No admin FCM tokens registered in DB. Skipping.');
+            console.warn(
+                `⚠️ sendFcmToAdmins: No fresh admin FCM tokens (updated within ${days}d). Skipping.`
+            );
             return { successCount: 0, failureCount: 0, tokenCount: 0, skipped: 'no_tokens' };
         }
 
         const tokens = rows.map(r => r.token).filter(Boolean);
-        console.log(`📤 sendFcmToAdmins: Sending to ${tokens.length} device(s). Title: "${title}"`);
+        console.log(`📤 sendFcmToAdmins: Sending to ${tokens.length} fresh device(s). Title: "${title}"`);
 
         // FCM data values MUST all be strings — stringify any non-strings
         const safeData = {};
@@ -230,5 +287,8 @@ async function sendFcmToAdmins(title, body, data = {}) {
 module.exports = {
     sendPushToUser,
     sendFcmToAdmins,
-    isFirebaseReady
+    isFirebaseReady,
+    pruneStaleAdminFcmTokens,
+    startAdminFcmTokenPruneWorker,
+    getAdminFcmMaxAgeDays
 };

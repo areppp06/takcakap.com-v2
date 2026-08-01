@@ -73,6 +73,12 @@ const startServer = async () => {
     }
     await assertNoPendingMigrations();
     emailService.startWorker();
+    try {
+        const { startAdminFcmTokenPruneWorker } = require('./pushService');
+        startAdminFcmTokenPruneWorker();
+    } catch (err) {
+        console.warn('Admin FCM prune worker failed to start:', err?.message || err);
+    }
     await new Promise((resolve, reject) => {
         const server = app.listen(PORT, HOST, () => {
             console.log(`🚀 Backend running on http://${HOST}:${PORT}`);

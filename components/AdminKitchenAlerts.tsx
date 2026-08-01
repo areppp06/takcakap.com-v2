@@ -17,6 +17,8 @@ const AdminKitchenAlerts: React.FC = () => {
   const [serverStatus, setServerStatus] = useState<{
     firebaseReady: boolean;
     tokenCount: number;
+    freshTokenCount?: number;
+    maxAgeDays?: number;
   } | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,9 @@ const AdminKitchenAlerts: React.FC = () => {
       const status = await api.getAdminFcmStatus();
       setServerStatus({
         firebaseReady: status.firebaseReady,
-        tokenCount: status.tokenCount
+        tokenCount: status.tokenCount,
+        freshTokenCount: (status as any).freshTokenCount,
+        maxAgeDays: (status as any).maxAgeDays
       });
     } catch (err: any) {
       setServerStatus(null);
@@ -73,7 +77,7 @@ const AdminKitchenAlerts: React.FC = () => {
   };
 
   const armed =
-    (serverStatus?.firebaseReady && (serverStatus?.tokenCount || 0) > 0) &&
+    (serverStatus?.firebaseReady && (serverStatus?.freshTokenCount ?? serverStatus?.tokenCount ?? 0) > 0) &&
     (!native || nativeStatus?.armed !== false);
 
   return (
@@ -99,7 +103,12 @@ const AdminKitchenAlerts: React.FC = () => {
 
       <ul className="text-sm space-y-1.5 mb-4 text-slate-600 dark:text-slate-300">
         <li>Firebase server: {serverStatus ? (serverStatus.firebaseReady ? 'ready' : 'NOT configured') : '…'}</li>
-        <li>Registered devices: {serverStatus ? serverStatus.tokenCount : '…'}</li>
+        <li>
+          Registered devices: {serverStatus ? serverStatus.tokenCount : '…'}
+          {serverStatus?.freshTokenCount != null
+            ? ` (${serverStatus.freshTokenCount} fresh / ${serverStatus.maxAgeDays ?? 14}d)`
+            : ''}
+        </li>
         {native && (
           <>
             <li>This device FCM token: {nativeStatus?.hasToken ? nativeStatus.tokenPreview || 'yes' : 'missing'}</li>
