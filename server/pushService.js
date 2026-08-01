@@ -94,27 +94,59 @@ const resolveFirebaseServiceAccount = () => {
 
 // Initialize Firebase Admin (for the Android wrapper app)
 let firebaseApp = null;
+/** Safe diagnostics for /api/admin/fcm-status (no secrets). */
+let firebaseInitInfo = {
+    ready: false,
+    projectId: null,
+    envJsonSet: false,
+    envJsonLength: 0,
+    envJsonStartsWith: '',
+    envPathSet: false,
+    error: null
+};
+
 try {
-    const hasEnvJson = Boolean(String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim());
-    const hasEnvPath = Boolean(String(process.env.GOOGLE_APPLICATION_CREDENTIALS || '').trim());
+    const rawEnv = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+    firebaseInitInfo.envJsonSet = Boolean(rawEnv);
+    firebaseInitInfo.envJsonLength = rawEnv.length;
+    firebaseInitInfo.envJsonStartsWith = rawEnv
+        ? rawEnv.slice(0, 12).replace(/[^\x20-\x7E]/g, '?')
+        : '';
+    firebaseInitInfo.envPathSet = Boolean(String(process.env.GOOGLE_APPLICATION_CREDENTIALS || '').trim());
+
     const serviceAccount = resolveFirebaseServiceAccount();
     if (serviceAccount) {
         firebaseApp = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
         const projectId = serviceAccount.project_id || serviceAccount.projectId || 'unknown';
+        firebaseInitInfo.ready = true;
+        firebaseInitInfo.projectId = projectId;
+        firebaseInitInfo.error = null;
         console.log(`✅ Firebase Admin initialized (project=${projectId}).`);
     } else if (process.env.FCM_SERVER_KEY) {
-        console.warn(
-            '⚠️ Found FCM_SERVER_KEY but firebase-admin requires a service account. Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS.'
-        );
+        firebaseInitInfo.error =
+            'FCM_SERVER_KEY is set but unsupported; use FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS';
+        console.warn(`⚠️ ${firebaseInitInfo.error}`);
     } else {
+        firebaseInitInfo.error =
+            'FIREBASE_SERVICE_ACCOUNT_JSON not visible inside container (check docker-compose environment list + stack env)';
         console.warn(
-            `⚠️ Firebase credentials not configured (FIREBASE_SERVICE_ACCOUNT_JSON set=${hasEnvJson}, GOOGLE_APPLICATION_CREDENTIALS set=${hasEnvPath}). Admin FCM will not work.`
+            `⚠️ Firebase credentials not configured (FIREBASE_SERVICE_ACCOUNT_JSON set=${firebaseInitInfo.envJsonSet}, GOOGLE_APPLICATION_CREDENTIALS set=${firebaseInitInfo.envPathSet}). Admin FCM will not work.`
         );
     }
 } catch (e) {
+    firebaseInitInfo.error = e.message || String(e);
     console.error('Failed to initialize Firebase Admin:', e.message);
+}
+
+function getFirebaseDiagnostics() {
+    return {
+        ...firebaseInitInfo,
+        ready: Boolean(firebaseApp),
+        buildSha: process.env.BUILD_SHA || null,
+        buildTime: process.env.BUILD_TIME || null
+    };
 }
 
 /**
@@ -319,6 +351,7 @@ module.exports = {
     sendPushToUser,
     sendFcmToAdmins,
     isFirebaseReady,
+    getFirebaseDiagnostics,
     pruneStaleAdminFcmTokens,
     startAdminFcmTokenPruneWorker,
     getAdminFcmMaxAgeDays

@@ -56,6 +56,9 @@ services:
       - R2_PUBLIC_URL_PREFIX
       - VAPID_PUBLIC_KEY
       - VAPID_PRIVATE_KEY
+      # Admin Android FCM (server-side send). Must be listed or Compose will not inject it.
+      - FIREBASE_SERVICE_ACCOUNT_JSON
+      - GOOGLE_APPLICATION_CREDENTIALS
     depends_on:
       - db
 

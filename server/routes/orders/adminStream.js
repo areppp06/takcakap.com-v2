@@ -14,6 +14,7 @@ const { orderEvents } = require('../../services/orders/orderEvents');
 const {
     sendFcmToAdmins,
     isFirebaseReady,
+    getFirebaseDiagnostics,
     pruneStaleAdminFcmTokens,
     getAdminFcmMaxAgeDays
 } = require('../../pushService');
@@ -120,6 +121,7 @@ module.exports = function register(app) {
             const freshCount = Number(freshRows?.[0]?.c || 0);
             return res.json({
                 firebaseReady: isFirebaseReady(),
+                firebase: getFirebaseDiagnostics(),
                 tokenCount: rows.length,
                 freshTokenCount: freshCount,
                 maxAgeDays: days,

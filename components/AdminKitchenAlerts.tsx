@@ -19,6 +19,17 @@ const AdminKitchenAlerts: React.FC = () => {
     tokenCount: number;
     freshTokenCount?: number;
     maxAgeDays?: number;
+    firebase?: {
+      ready?: boolean;
+      projectId?: string | null;
+      envJsonSet?: boolean;
+      envJsonLength?: number;
+      envJsonStartsWith?: string;
+      envPathSet?: boolean;
+      error?: string | null;
+      buildSha?: string | null;
+      buildTime?: string | null;
+    };
   } | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,7 +44,8 @@ const AdminKitchenAlerts: React.FC = () => {
         firebaseReady: status.firebaseReady,
         tokenCount: status.tokenCount,
         freshTokenCount: (status as any).freshTokenCount,
-        maxAgeDays: (status as any).maxAgeDays
+        maxAgeDays: (status as any).maxAgeDays,
+        firebase: (status as any).firebase
       });
     } catch (err: any) {
       setServerStatus(null);
@@ -103,6 +115,21 @@ const AdminKitchenAlerts: React.FC = () => {
 
       <ul className="text-sm space-y-1.5 mb-4 text-slate-600 dark:text-slate-300">
         <li>Firebase server: {serverStatus ? (serverStatus.firebaseReady ? 'ready' : 'NOT configured') : '…'}</li>
+        {serverStatus?.firebase && !serverStatus.firebaseReady && (
+          <li className="text-rose-600 dark:text-rose-300 text-xs font-normal whitespace-pre-wrap">
+            diag: envJsonSet={String(serverStatus.firebase.envJsonSet)} len={serverStatus.firebase.envJsonLength ?? 0}
+            {serverStatus.firebase.envJsonStartsWith
+              ? ` starts=${serverStatus.firebase.envJsonStartsWith}`
+              : ''}
+            {serverStatus.firebase.error ? ` | ${serverStatus.firebase.error}` : ''}
+            {serverStatus.firebase.buildSha
+              ? ` | build=${String(serverStatus.firebase.buildSha).slice(0, 8)}`
+              : ''}
+          </li>
+        )}
+        {serverStatus?.firebaseReady && serverStatus.firebase?.projectId && (
+          <li className="text-xs font-normal text-slate-500">Firebase project: {serverStatus.firebase.projectId}</li>
+        )}
         <li>
           Registered devices: {serverStatus ? serverStatus.tokenCount : '…'}
           {serverStatus?.freshTokenCount != null
