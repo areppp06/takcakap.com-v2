@@ -27,18 +27,46 @@ if (publicVapidKey && privateVapidKey) {
  * 1) FIREBASE_SERVICE_ACCOUNT_JSON — raw JSON string (or base64 of JSON)
  * 2) GOOGLE_APPLICATION_CREDENTIALS — absolute/relative path to a JSON key file
  * 3) Legacy local file server/firebase-service-account.json (dev only; must not be committed)
+ *
+ * Docker note: do NOT wrap the value in quotes inside the container env.
+ * If the platform stores quotes, we strip one layer of matching ' or " wrappers.
  */
 const resolveFirebaseServiceAccount = () => {
-    const rawJson = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+    let rawJson = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+    // Strip one layer of wrapping quotes (common Portainer/Docker UI mistake)
+    if (
+        (rawJson.startsWith("'") && rawJson.endsWith("'") && rawJson.length >= 2) ||
+        (rawJson.startsWith('"') && rawJson.endsWith('"') && rawJson.length >= 2)
+    ) {
+        rawJson = rawJson.slice(1, -1).trim();
+    }
+    // Some UIs double-escape newlines as \\n — normalize private_key style escapes after parse fails once
     if (rawJson) {
         try {
             if (rawJson.startsWith('{')) {
                 return JSON.parse(rawJson);
             }
-            const decoded = Buffer.from(rawJson, 'base64').toString('utf8');
-            return JSON.parse(decoded);
+            // base64 (standard or url-safe)
+            const normalizedB64 = rawJson.replace(/-/g, '+').replace(/_/g, '/');
+            const decoded = Buffer.from(normalizedB64, 'base64').toString('utf8').trim();
+            if (decoded.startsWith('{')) {
+                return JSON.parse(decoded);
+            }
+            throw new Error('decoded value is not JSON object');
         } catch (err) {
-            throw new Error(`FIREBASE_SERVICE_ACCOUNT_JSON is invalid JSON: ${err.message}`);
+            // Retry: value may contain literal \\n sequences outside proper JSON
+            try {
+                if (rawJson.includes('\\n') && rawJson.startsWith('{')) {
+                    const fixed = rawJson.replace(/\\\\n/g, '\\n');
+                    return JSON.parse(fixed);
+                }
+            } catch (_e2) {
+                // fall through
+            }
+            const preview = rawJson.slice(0, 24).replace(/\s+/g, ' ');
+            throw new Error(
+                `FIREBASE_SERVICE_ACCOUNT_JSON is invalid (len=${rawJson.length}, starts=${JSON.stringify(preview)}): ${err.message}`
+            );
         }
     }
 
@@ -67,19 +95,22 @@ const resolveFirebaseServiceAccount = () => {
 // Initialize Firebase Admin (for the Android wrapper app)
 let firebaseApp = null;
 try {
+    const hasEnvJson = Boolean(String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim());
+    const hasEnvPath = Boolean(String(process.env.GOOGLE_APPLICATION_CREDENTIALS || '').trim());
     const serviceAccount = resolveFirebaseServiceAccount();
     if (serviceAccount) {
         firebaseApp = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
-        console.log('✅ Firebase Admin initialized with service account credentials.');
+        const projectId = serviceAccount.project_id || serviceAccount.projectId || 'unknown';
+        console.log(`✅ Firebase Admin initialized (project=${projectId}).`);
     } else if (process.env.FCM_SERVER_KEY) {
         console.warn(
             '⚠️ Found FCM_SERVER_KEY but firebase-admin requires a service account. Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS.'
         );
     } else {
         console.warn(
-            '⚠️ Firebase credentials not configured. Admin app FCM push notifications will not work.'
+            `⚠️ Firebase credentials not configured (FIREBASE_SERVICE_ACCOUNT_JSON set=${hasEnvJson}, GOOGLE_APPLICATION_CREDENTIALS set=${hasEnvPath}). Admin FCM will not work.`
         );
     }
 } catch (e) {
