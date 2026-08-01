@@ -28,12 +28,8 @@ foodidash-takcakap-android-app-v2/
 takcakap-admin-apk/
 *.apk
 
-# Secrets — never commit service account keys
+# Secrets
 .env
-server/firebase-service-account.json
-**/firebase-service-account.json
-*service-account*.json
-*firebase*adminsdk*.json
 
 # Local recovery snapshots (not for runtime or GHCR)
 *.bak
