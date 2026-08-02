@@ -36,6 +36,7 @@ const AdminCustomers = React.lazy(() => import('./pages/AdminCustomers'));
 const AdminDeliveryOptions = React.lazy(() => import('./pages/AdminDeliveryOptions'));
 const AdminPaymentOptions = React.lazy(() => import('./pages/AdminPaymentOptions'));
 const AdminManageShop = React.lazy(() => import('./pages/AdminManageShop'));
+const AdminSettings = React.lazy(() => import('./pages/AdminSettings'));
 const AdminOrderAlert = React.lazy(() => import('./components/AdminOrderAlert'));
 
 const ScrollToTop = () => {
@@ -144,6 +145,7 @@ const App: React.FC = () => {
               <Route path="/manage-shop" element={<RequireAdminAuth><SuspensePage><AdminManageShop /></SuspensePage></RequireAdminAuth>} />
               <Route path="/points" element={<RequireAdminAuth><SuspensePage><AdminPoints /></SuspensePage></RequireAdminAuth>} />
               <Route path="/vouchers" element={<RequireAdminAuth><SuspensePage><AdminVouchers /></SuspensePage></RequireAdminAuth>} />
+              <Route path="/settings" element={<RequireAdminAuth><SuspensePage><AdminSettings /></SuspensePage></RequireAdminAuth>} />
               <Route path="/customers" element={<RequireAdminAuth><SuspensePage><AdminCustomers /></SuspensePage></RequireAdminAuth>} />
               <Route path="/orders" element={<RequireAdminAuth><SuspensePage><AdminOrders /></SuspensePage></RequireAdminAuth>} />
               <Route path="/categories" element={<RequireAdminAuth><SuspensePage><AdminCategories /></SuspensePage></RequireAdminAuth>} />
@@ -162,6 +164,7 @@ const App: React.FC = () => {
               <Route path="/admin/payment-options" element={<Navigate to="/payment-options" replace />} />
               <Route path="/admin/points" element={<Navigate to="/points" replace />} />
               <Route path="/admin/vouchers" element={<Navigate to="/vouchers" replace />} />
+              <Route path="/admin/settings" element={<Navigate to="/settings" replace />} />
               
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

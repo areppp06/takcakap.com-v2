@@ -15,7 +15,8 @@ const NAV_ITEMS = [
   { to: '/customers', label: 'Customers', icon: 'groups' },
   { to: '/payment-options', label: 'Payment', icon: 'payments' },
   { to: '/points', label: 'Points', icon: 'stars' },
-  { to: '/vouchers', label: 'Vouchers', icon: 'local_activity' }
+  { to: '/vouchers', label: 'Vouchers', icon: 'local_activity' },
+  { to: '/settings', label: 'Settings', icon: 'settings' }
 ];
 
 const AdminSidebarNav: React.FC<AdminSidebarNavProps> = ({ currentPath }) => {

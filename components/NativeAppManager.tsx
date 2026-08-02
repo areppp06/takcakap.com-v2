@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   isNativeApp,
-  getFcmTokenSync,
-  getNativeAlertStatus
+  getFcmTokenSync
 } from '../utils/nativeBridge';
 import { api } from '../services/api';
 
@@ -16,6 +15,11 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 type RegisterReason = 'login' | 'resume' | 'heartbeat' | 'online' | 'token_change';
 
+type BannerState = {
+  text: string;
+  type: 'live' | 'error';
+} | null;
+
 /**
  * Keeps this device's FCM token alive on the server while the admin APK session
  * is active. Heartbeat re-POSTs the same token so 14d freshness never expires
@@ -26,7 +30,7 @@ export const NativeAppManager: React.FC = () => {
   const registeredTokenRef = useRef<string | null>(null);
   const lastPostAtRef = useRef(0);
   const lastAuthRef = useRef(false);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner, setBanner] = useState<BannerState>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +79,7 @@ export const NativeAppManager: React.FC = () => {
         if (typeof navigator !== 'undefined' && navigator.onLine === false) {
           console.log(`[NativeAppManager] Offline — defer register (${reason})`);
           if (!cancelled) {
-            setBanner('Order alerts paused: phone is offline. Will re-arm when online.');
+            setBanner({ text: 'Offline \u2014 will reconnect when network returns.', type: 'error' });
           }
           return;
         }
@@ -93,7 +97,7 @@ export const NativeAppManager: React.FC = () => {
 
         if (!token) {
           console.error('[NativeAppManager] Could not retrieve FCM token after 30s');
-          if (!cancelled) setBanner('Order alerts not armed: missing FCM token. Reopen the app.');
+          if (!cancelled) setBanner({ text: 'Order alerts not armed: missing FCM token. Reopen the app.', type: 'error' });
           return;
         }
 
@@ -142,14 +146,8 @@ export const NativeAppManager: React.FC = () => {
             lastPostAtRef.current = Date.now();
             console.log(`[NativeAppManager] FCM token registered (${reason})`);
             if (!cancelled) {
-              const status = getNativeAlertStatus();
-              if (status && !status.notificationsEnabled) {
-                setBanner('Enable notifications for TakCakap Admin or closed-app alarms will fail.');
-              } else if (status && !status.batteryUnrestricted) {
-                setBanner('Disable battery optimization for TakCakap Admin for reliable closed-app alarms.');
-              } else {
-                setBanner(null);
-              }
+              // Successfully armed — show LIVE banner
+              setBanner({ text: 'LIVE \u2014 Listening for incoming orders...', type: 'live' });
             }
             return;
           } catch (error) {
@@ -159,7 +157,7 @@ export const NativeAppManager: React.FC = () => {
           }
         }
         console.error('[NativeAppManager] Register gave up', lastError);
-        if (!cancelled) setBanner('Order alerts not armed: server token registration failed.');
+        if (!cancelled) setBanner({ text: 'Order alerts not armed: server token registration failed.', type: 'error' });
       } finally {
         registerInFlight = false;
       }
@@ -208,10 +206,22 @@ export const NativeAppManager: React.FC = () => {
 
   if (!banner || !isNativeApp()) return null;
 
+  const isLive = banner.type === 'live';
+
   return (
     <div className="fixed top-0 inset-x-0 z-[150] px-3 pt-2 pointer-events-none">
-      <div className="mx-auto max-w-lg rounded-xl bg-amber-500 text-black text-xs font-semibold px-3 py-2 shadow-lg pointer-events-auto">
-        {banner}
+      <div className={`mx-auto max-w-lg rounded-xl text-xs font-semibold px-3 py-2 shadow-lg pointer-events-auto flex items-center gap-2 ${
+        isLive
+          ? 'bg-emerald-500 text-white'
+          : 'bg-rose-500 text-white'
+      }`}>
+        {isLive && (
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+          </span>
+        )}
+        {banner.text}
       </div>
     </div>
   );
