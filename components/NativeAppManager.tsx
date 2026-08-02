@@ -15,9 +15,11 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 type RegisterReason = 'login' | 'resume' | 'heartbeat' | 'online' | 'token_change';
 
+export const NATIVE_APP_STATUS_EVENT = 'native-app-status';
+
 type BannerState = {
   text: string;
-  type: 'live' | 'error';
+  type: 'error';
 } | null;
 
 /**
@@ -146,8 +148,9 @@ export const NativeAppManager: React.FC = () => {
             lastPostAtRef.current = Date.now();
             console.log(`[NativeAppManager] FCM token registered (${reason})`);
             if (!cancelled) {
-              // Successfully armed — show LIVE banner
-              setBanner({ text: 'LIVE \u2014 Listening for incoming orders...', type: 'live' });
+              // Successfully armed — dispatch event instead of showing banner
+              setBanner(null);
+              window.dispatchEvent(new CustomEvent(NATIVE_APP_STATUS_EVENT, { detail: { isLive: true } }));
             }
             return;
           } catch (error) {
@@ -170,6 +173,7 @@ export const NativeAppManager: React.FC = () => {
     if (wasAuthed && !isAuthedAdmin) {
       void unregisterIfNeeded();
       setBanner(null);
+      window.dispatchEvent(new CustomEvent(NATIVE_APP_STATUS_EVENT, { detail: { isLive: false } }));
     } else if (isAuthedAdmin) {
       void registerToken('login');
     }
@@ -206,21 +210,9 @@ export const NativeAppManager: React.FC = () => {
 
   if (!banner || !isNativeApp()) return null;
 
-  const isLive = banner.type === 'live';
-
   return (
     <div className="fixed top-0 inset-x-0 z-[150] px-3 pt-2 pointer-events-none">
-      <div className={`mx-auto max-w-lg rounded-xl text-xs font-semibold px-3 py-2 shadow-lg pointer-events-auto flex items-center gap-2 ${
-        isLive
-          ? 'bg-emerald-500 text-white'
-          : 'bg-rose-500 text-white'
-      }`}>
-        {isLive && (
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-          </span>
-        )}
+      <div className="mx-auto max-w-lg rounded-xl text-xs font-semibold px-3 py-2 shadow-lg pointer-events-auto flex items-center gap-2 bg-rose-500 text-white">
         {banner.text}
       </div>
     </div>

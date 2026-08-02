@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { NATIVE_APP_STATUS_EVENT } from './NativeAppManager';
 import BrandLogo from './BrandLogo';
 
 type AdminMobileNavProps = {
@@ -22,6 +23,17 @@ const NAV_ITEMS = [
 ];
 
 const AdminMobileNav: React.FC<AdminMobileNavProps> = ({ currentPath, onLogout }) => {
+  const [isAppLive, setIsAppLive] = useState(false);
+
+  useEffect(() => {
+    const handleStatus = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setIsAppLive(customEvent.detail?.isLive || false);
+    };
+    window.addEventListener(NATIVE_APP_STATUS_EVENT, handleStatus);
+    return () => window.removeEventListener(NATIVE_APP_STATUS_EVENT, handleStatus);
+  }, []);
+
   return (
     <div className="lg:hidden sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-4 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur border-b border-primary/10">
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -63,6 +75,12 @@ const AdminMobileNav: React.FC<AdminMobileNavProps> = ({ currentPath, onLogout }
               >
                 <span className="material-symbols-outlined text-sm">{item.icon}</span>
                 {item.label}
+                {item.to === '/settings' && isAppLive && (
+                  <span className="relative flex h-2 w-2 ml-1" title="Order alerts: LIVE">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
               </Link>
             );
           })}
